@@ -18,18 +18,18 @@ import type { ComputerPlan, GroundPos, TankState, TerrainState, Wind } from "./g
 export function chooseComputerPlan(
   playerTank: TankState,
   computerTank: TankState,
+  otherTanks: TankState[],
   terrain: TerrainState,
   wind: Wind,
 ): ComputerPlan {
   const targetYaw = yawTo(computerTank.position, playerTank.position);
-  const distance = groundDistance(playerTank.position, computerTank.position);
   const sidestepYaw = targetYaw + randomBetween(-105, 105);
   const moveDistance = randomBetween(0.5, Math.min(2.8, MOVEMENT_PER_TURN));
   const desiredPosition: GroundPos = {
     x: computerTank.position.x + Math.cos(degreesToRadians(sidestepYaw)) * moveDistance,
     y: computerTank.position.y + Math.sin(degreesToRadians(sidestepYaw)) * moveDistance,
   };
-  const move = canMoveTankTo(computerTank, terrain, desiredPosition, playerTank);
+  const move = canMoveTankTo(computerTank, terrain, desiredPosition, otherTanks);
   const finalPosition = move.allowed ? move.position : computerTank.position;
   const finalHeight = move.allowed ? move.height : terrainHeightAt(terrain, finalPosition);
   const movementUsed = move.allowed ? groundDistance(computerTank.position, finalPosition) : 0;

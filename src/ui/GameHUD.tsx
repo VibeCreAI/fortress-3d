@@ -9,14 +9,17 @@ import {
   MoveHorizontal,
   Plus,
   RefreshCcw,
+  Trophy,
   Wind as WindIcon,
   ZoomIn,
 } from "lucide-react";
 import type { ExplosionState, GamePhase, TankState, TurnOwner, Wind } from "../game/gameTypes";
 
 type GameHUDProps = {
+  stage: number;
   playerTank: TankState;
-  computerTank: TankState;
+  computerTanks: TankState[];
+  activeEnemyIndex: number;
   turnOwner: TurnOwner;
   phase: GamePhase;
   wind: Wind;
@@ -34,9 +37,19 @@ function hpPercent(hp: number) {
   return `${Math.max(0, Math.min(100, hp))}%`;
 }
 
-function turnText(turnOwner: TurnOwner, phase: GamePhase, winner: TurnOwner | null) {
+function turnText(
+  turnOwner: TurnOwner,
+  phase: GamePhase,
+  winner: TurnOwner | null,
+  activeEnemyIndex: number,
+  enemyCount: number,
+) {
   if (winner) {
     return winner === "player" ? "Player wins" : "Computer wins";
+  }
+
+  if (phase === "stageClear") {
+    return "Stage clear!";
   }
 
   if (phase === "projectileFlying") {
@@ -48,6 +61,9 @@ function turnText(turnOwner: TurnOwner, phase: GamePhase, winner: TurnOwner | nu
   }
 
   if (turnOwner === "computer") {
+    if (enemyCount > 1) {
+      return `Computer ${activeEnemyIndex + 1}/${enemyCount} aiming...`;
+    }
     return "Computer is aiming...";
   }
 
@@ -55,8 +71,10 @@ function turnText(turnOwner: TurnOwner, phase: GamePhase, winner: TurnOwner | nu
 }
 
 export function GameHUD({
+  stage,
   playerTank,
-  computerTank,
+  computerTanks,
+  activeEnemyIndex,
   turnOwner,
   phase,
   wind,
@@ -70,11 +88,16 @@ export function GameHUD({
   onReset,
 }: GameHUDProps) {
   const disableControls = !canPlayerAct;
+  const enemyCount = computerTanks.length;
+  const cpuMaxHp = computerTanks.reduce((m, t) => Math.max(m, t.hp), 0) || 100;
 
   return (
     <div className="hud-layer">
       <section className="combat-panel hud-panel">
-        <div className="turn-chip">{turnText(turnOwner, phase, winner)}</div>
+        <div className="stage-chip">Stage {stage}</div>
+        <div className="turn-chip">
+          {turnText(turnOwner, phase, winner, activeEnemyIndex, enemyCount)}
+        </div>
         <div className="hp-row">
           <div className="hp-label">
             <HeartPulse size={16} />
@@ -85,16 +108,28 @@ export function GameHUD({
           </div>
           <span>{Math.round(playerTank.hp)}</span>
         </div>
-        <div className="hp-row">
-          <div className="hp-label">
-            <HeartPulse size={16} />
-            CPU
-          </div>
-          <div className="hp-track">
-            <div className="hp-fill cpu-hp" style={{ width: hpPercent(computerTank.hp) }} />
-          </div>
-          <span>{Math.round(computerTank.hp)}</span>
-        </div>
+        {computerTanks.map((tank, i) => {
+          const labelSuffix = enemyCount > 1 ? ` ${i + 1}` : "";
+          const isActive = turnOwner === "computer" && i === activeEnemyIndex && tank.hp > 0;
+          return (
+            <div className={`hp-row${isActive ? " hp-row-active" : ""}`} key={i}>
+              <div className="hp-label">
+                <HeartPulse size={16} />
+                {`CPU${labelSuffix}`}
+              </div>
+              <div className="hp-track">
+                <div
+                  className="hp-fill cpu-hp"
+                  style={{
+                    width: hpPercent((tank.hp / Math.max(1, cpuMaxHp)) * 100),
+                    opacity: tank.hp > 0 ? 1 : 0.3,
+                  }}
+                />
+              </div>
+              <span>{Math.round(tank.hp)}</span>
+            </div>
+          );
+        })}
         {lastExplosion && phase === "exploding" && (
           <div className="impact-note">
             {lastExplosion.damage > 0
@@ -182,12 +217,19 @@ export function GameHUD({
         <span>휠 줌</span>
       </div>
 
+      {phase === "stageClear" && (
+        <section className="winner-panel hud-panel">
+          <div className="winner-title">
+            <Trophy size={20} /> Stage {stage} Clear
+          </div>
+          <div className="winner-copy">Loading next stage...</div>
+        </section>
+      )}
+
       {winner && (
         <section className="winner-panel hud-panel">
-          <div className="winner-title">{winner === "player" ? "Victory" : "Defeat"}</div>
-          <div className="winner-copy">
-            {winner === "player" ? "The computer tank is out." : "Your tank is out."}
-          </div>
+          <div className="winner-title">Defeat</div>
+          <div className="winner-copy">Your tank is out. You reached Stage {stage}.</div>
           <button type="button" className="reset-button" onClick={onReset}>
             <RefreshCcw size={18} />
             Restart

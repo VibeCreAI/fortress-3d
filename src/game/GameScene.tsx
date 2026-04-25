@@ -23,9 +23,11 @@ import type {
 type OmnCam = { yaw: number; pitch: number; panX: number; panZ: number; distance: number };
 
 type GameSceneProps = {
+  stage: number;
   terrain: TerrainState;
   playerTank: TankState;
-  computerTank: TankState;
+  computerTanks: TankState[];
+  activeEnemyIndex: number;
   turnOwner: TurnOwner;
   phase: GamePhase;
   wind: Wind;
@@ -79,7 +81,8 @@ function CameraRig({
 export function GameScene({
   terrain,
   playerTank,
-  computerTank,
+  computerTanks,
+  activeEnemyIndex,
   turnOwner,
   phase,
   wind,
@@ -90,7 +93,9 @@ export function GameScene({
 }: GameSceneProps) {
   const showPlayerPreview = turnOwner === "player" && phase === "aiming" && !projectile;
   const showComputerPreview = turnOwner === "computer" && phase === "aiming" && !projectile;
-  const projectileTarget = projectile?.owner === "player" ? computerTank : playerTank;
+  const activeComputerTank = computerTanks[activeEnemyIndex];
+  const projectileTargets =
+    projectile?.owner === "player" ? computerTanks : [playerTank];
 
   return (
     <Canvas
@@ -122,18 +127,29 @@ export function GameScene({
       <Terrain terrain={terrain} />
       <WindFlag terrain={terrain} wind={wind} />
       <Tank tank={playerTank} owner="player" active={turnOwner === "player" && phase === "aiming"} />
-      <Tank tank={computerTank} owner="computer" active={turnOwner === "computer" && phase === "aiming"} />
+      {computerTanks.map((tank, i) =>
+        tank.hp > 0 ? (
+          <Tank
+            key={i}
+            tank={tank}
+            owner="computer"
+            active={turnOwner === "computer" && phase === "aiming" && i === activeEnemyIndex}
+          />
+        ) : null,
+      )}
 
       {showPlayerPreview && <TrajectoryPreview tank={playerTank} wind={wind} />}
-      {showComputerPreview && <TrajectoryPreview tank={computerTank} wind={wind} color="#ffc36e" />}
+      {showComputerPreview && activeComputerTank && (
+        <TrajectoryPreview tank={activeComputerTank} wind={wind} color="#ffc36e" />
+      )}
 
-      {projectile && projectileTarget && (
+      {projectile && (
         <Projectile
           key={projectile.id}
           launch={projectile}
           wind={wind}
           terrain={terrain}
-          targetTank={projectileTarget}
+          targetTanks={projectileTargets}
           onImpact={onProjectileImpact}
         />
       )}

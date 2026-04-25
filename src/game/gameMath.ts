@@ -2,32 +2,25 @@ import {
   CANNON_BASE_FORWARD_OFFSET,
   CANNON_BASE_HEIGHT,
   CANNON_LENGTH,
-  COMPUTER_START_POSITION,
   CRATER_DEPTH,
   EXPLOSION_RADIUS,
   GRAVITY,
-  GROUND_MAX_X,
-  GROUND_MAX_Y,
-  GROUND_MIN_X,
-  GROUND_MIN_Y,
   MAX_ELEVATION,
   MAX_EXPLOSION_DAMAGE,
   MAX_POWER,
   MIN_ELEVATION,
   MIN_POWER,
   MIN_TANK_DISTANCE,
-  PLAYER_START_POSITION,
   POWER_TO_VELOCITY,
   TANK_CENTER_HEIGHT,
   TERRAIN_BASE_DEPTH,
   TERRAIN_CELL_SIZE,
-  TERRAIN_DEPTH,
   TERRAIN_MAX_HEIGHT,
   TERRAIN_MIN_HEIGHT,
-  TERRAIN_WIDTH,
   TRAJECTORY_PREVIEW_STEPS,
   TRAJECTORY_PREVIEW_TIME,
   WIND_ACCELERATION_SCALE,
+  getStageConfig,
 } from "./constants";
 import type { GroundPos, TankState, TerrainState, TurnOwner, Vec3, Wind } from "./gameTypes";
 
@@ -81,45 +74,172 @@ function hill(x: number, y: number, cx: number, cy: number, radius: number, heig
   return Math.exp(-distanceSq / (radius * radius)) * height;
 }
 
-function deterministicTerrainHeight(x: number, y: number) {
+function mulberry32(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6D2B79F5) | 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+type Plateau = { position: GroundPos; radius: number };
+
+type GeneratedHill = { x: number; y: number; radius: number; height: number; sign: 1 | -1 };
+
+export type StageBlueprint = {
+  terrain: TerrainState;
+  playerStart: GroundPos;
+  enemyStarts: GroundPos[];
+  boundsX: number;
+  boundsY: number;
+};
+
+function spreadEnemyStarts(count: number, boundsX: number, boundsY: number): GroundPos[] {
+  const baseX = boundsX * 0.65;
+  if (count === 1) {
+    return [{ x: baseX, y: boundsY * 0.4 }];
+  }
+  if (count === 2) {
+    return [
+      { x: baseX, y: boundsY * 0.55 },
+      { x: baseX, y: -boundsY * 0.55 },
+    ];
+  }
+  if (count === 3) {
+    return [
+      { x: baseX, y: 0 },
+      { x: baseX * 0.92, y: boundsY * 0.6 },
+      { x: baseX * 0.92, y: -boundsY * 0.6 },
+    ];
+  }
+  // 4+: spread along right side
+  const out: GroundPos[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0.5 : i / (count - 1);
+    out.push({ x: baseX * (i % 2 === 0 ? 1 : 0.88), y: (t - 0.5) * 2 * boundsY * 0.7 });
+  }
+  return out;
+}
+
+function generateHills(
+  rng: () => number,
+  count: number,
+  boundsX: number,
+  boundsY: number,
+  hMin: number,
+  hMax: number,
+  rMin: number,
+  rMax: number,
+  plateaus: Plateau[],
+): GeneratedHill[] {
+  const hills: GeneratedHill[] = [];
+  let attempts = 0;
+  while (hills.length < count && attempts < count * 10) {
+    attempts += 1;
+    const x = (rng() * 2 - 1) * boundsX * 0.85;
+    const y = (rng() * 2 - 1) * boundsY * 0.85;
+    const radius = rMin + rng() * (rMax - rMin);
+    const height = hMin + rng() * (hMax - hMin);
+    const sign: 1 | -1 = rng() < 0.18 ? -1 : 1;
+
+    const tooNearPlateau = plateaus.some(
+      (p) => Math.hypot(x - p.position.x, y - p.position.y) < p.radius + radius * 0.45,
+    );
+    if (tooNearPlateau) continue;
+
+    hills.push({ x, y, radius, height, sign });
+  }
+  return hills;
+}
+
+function stageTerrainHeight(
+  x: number,
+  y: number,
+  hills: GeneratedHill[],
+  plateaus: Plateau[],
+  noiseAmp: number,
+  rngOffset: number,
+) {
   const waves =
-    Math.sin((x + 4.1) * 0.36) * 0.55 +
-    Math.cos((y - 1.7) * 0.48) * 0.46 +
-    Math.sin((x + y) * 0.22) * 0.34;
-  const mountains =
-    hill(x, y, -7, 1, 7.4, 1.8) +
-    hill(x, y, 5.5, -4.8, 6.2, 1.45) +
-    hill(x, y, 12, 7, 5.8, 1.2) -
-    hill(x, y, -1.2, 2, 5.2, 0.9);
-  const rawHeight = 1.15 + waves + mountains;
-  const plateauInfluence =
-    Math.max(0, 1 - groundDistance({ x, y }, PLAYER_START_POSITION) / 4.7) +
-    Math.max(0, 1 - groundDistance({ x, y }, COMPUTER_START_POSITION) / 4.7);
+    Math.sin((x + 4.1 + rngOffset) * 0.36) * 0.55 +
+    Math.cos((y - 1.7 + rngOffset * 0.5) * 0.48) * 0.46 +
+    Math.sin((x + y + rngOffset * 0.31) * 0.22) * 0.34;
+
+  let mountains = 0;
+  for (const h of hills) {
+    mountains += hill(x, y, h.x, h.y, h.radius, h.height) * h.sign;
+  }
+
+  const rawHeight = 1.15 + waves * noiseAmp + mountains;
+
+  let plateauInfluence = 0;
+  for (const p of plateaus) {
+    plateauInfluence += Math.max(0, 1 - groundDistance({ x, y }, p.position) / p.radius);
+  }
+  const blendT = clamp(plateauInfluence, 0, 1);
   const plateauHeight = 1.15;
-  const blended = plateauInfluence > 0
-    ? rawHeight * (1 - clamp(plateauInfluence, 0, 1)) + plateauHeight * clamp(plateauInfluence, 0, 1)
-    : rawHeight;
+  const blended = rawHeight * (1 - blendT) + plateauHeight * blendT;
 
   return clamp(Math.round(blended * 2) / 2, TERRAIN_MIN_HEIGHT, TERRAIN_MAX_HEIGHT);
 }
 
-export function createInitialTerrain(): TerrainState {
-  const heights = Array.from({ length: TERRAIN_DEPTH }, (_, row) => {
-    const y = GROUND_MIN_Y + row * TERRAIN_CELL_SIZE;
-    return Array.from({ length: TERRAIN_WIDTH }, (_, column) => {
-      const x = GROUND_MIN_X + column * TERRAIN_CELL_SIZE;
-      return deterministicTerrainHeight(x, y);
+export function createStageBlueprint(stage: number): StageBlueprint {
+  const config = getStageConfig(stage);
+  const rng = mulberry32(stage * 7919 + config.seedOffset);
+  const rngOffset = rng() * 6.28;
+
+  const minX = -config.boundsX;
+  const minY = -config.boundsY;
+
+  const playerStart: GroundPos = { x: -config.boundsX * 0.65, y: -config.boundsY * 0.4 };
+  const enemyStarts = spreadEnemyStarts(config.enemyCount, config.boundsX, config.boundsY);
+
+  const plateaus: Plateau[] = [
+    { position: playerStart, radius: 4.7 },
+    ...enemyStarts.map((pos) => ({ position: pos, radius: 4.7 })),
+  ];
+
+  const hills = generateHills(
+    rng,
+    config.hillCount,
+    config.boundsX,
+    config.boundsY,
+    config.hillHeightMin,
+    config.hillHeightMax,
+    config.hillRadiusMin,
+    config.hillRadiusMax,
+    plateaus,
+  );
+
+  const heights = Array.from({ length: config.terrainDepth }, (_, row) => {
+    const y = minY + row * TERRAIN_CELL_SIZE;
+    return Array.from({ length: config.terrainWidth }, (_, column) => {
+      const x = minX + column * TERRAIN_CELL_SIZE;
+      return stageTerrainHeight(x, y, hills, plateaus, config.noiseAmplitude, rngOffset);
     });
   });
 
   return {
-    minX: GROUND_MIN_X,
-    minY: GROUND_MIN_Y,
-    width: TERRAIN_WIDTH,
-    depth: TERRAIN_DEPTH,
-    cellSize: TERRAIN_CELL_SIZE,
-    heights,
+    terrain: {
+      minX,
+      minY,
+      width: config.terrainWidth,
+      depth: config.terrainDepth,
+      cellSize: TERRAIN_CELL_SIZE,
+      heights,
+    },
+    playerStart,
+    enemyStarts,
+    boundsX: config.boundsX,
+    boundsY: config.boundsY,
   };
+}
+
+export function createInitialTerrain(): TerrainState {
+  return createStageBlueprint(1).terrain;
 }
 
 function terrainColumn(terrain: TerrainState, x: number) {
@@ -172,10 +292,18 @@ export function applyExplosionCrater(terrain: TerrainState, center: GroundPos) {
   };
 }
 
-export function clampGroundPosition(position: GroundPos): GroundPos {
+export function terrainMaxX(terrain: TerrainState) {
+  return terrain.minX + (terrain.width - 1) * terrain.cellSize;
+}
+
+export function terrainMaxY(terrain: TerrainState) {
+  return terrain.minY + (terrain.depth - 1) * terrain.cellSize;
+}
+
+export function clampGroundPosition(position: GroundPos, terrain: TerrainState): GroundPos {
   return {
-    x: clamp(position.x, GROUND_MIN_X, GROUND_MAX_X),
-    y: clamp(position.y, GROUND_MIN_Y, GROUND_MAX_Y),
+    x: clamp(position.x, terrain.minX, terrainMaxX(terrain)),
+    y: clamp(position.y, terrain.minY, terrainMaxY(terrain)),
   };
 }
 
@@ -272,11 +400,18 @@ export function calculateExplosionDamage(impact: Vec3, targetTank: TankState) {
   return Math.round(MAX_EXPLOSION_DAMAGE * (1 - impactDistance / EXPLOSION_RADIUS));
 }
 
-export function canMoveTankTo(tank: TankState, terrain: TerrainState, nextPosition: GroundPos, otherTank: TankState) {
-  const clamped = clampGroundPosition(nextPosition);
+export function canMoveTankTo(
+  tank: TankState,
+  terrain: TerrainState,
+  nextPosition: GroundPos,
+  otherTanks: TankState[],
+) {
+  const clamped = clampGroundPosition(nextPosition, terrain);
   const nextHeight = terrainHeightAt(terrain, clamped);
   const heightDelta = Math.abs(nextHeight - tank.height);
-  const farEnough = groundDistance(clamped, otherTank.position) >= MIN_TANK_DISTANCE;
+  const farEnough = otherTanks.every(
+    (other) => other.hp <= 0 || groundDistance(clamped, other.position) >= MIN_TANK_DISTANCE,
+  );
 
   return {
     allowed: heightDelta <= 1.05 && farEnough,

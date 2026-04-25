@@ -2,10 +2,6 @@ import { Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
 import {
-  GROUND_MAX_X,
-  GROUND_MAX_Y,
-  GROUND_MIN_X,
-  GROUND_MIN_Y,
   GRAVITY,
   PROJECTILE_MAX_FLIGHT_TIME,
   TANK_HIT_RADIUS,
@@ -14,6 +10,8 @@ import {
   getTankCenter,
   groundFromWorld,
   terrainHeightAt,
+  terrainMaxX,
+  terrainMaxY,
   vec3Distance,
   windAcceleration,
 } from "./gameMath";
@@ -23,11 +21,11 @@ type ProjectileProps = {
   launch: ProjectileLaunch;
   wind: Wind;
   terrain: TerrainState;
-  targetTank: TankState;
+  targetTanks: TankState[];
   onImpact: (position: Vec3) => void;
 };
 
-export function Projectile({ launch, wind, terrain, targetTank, onImpact }: ProjectileProps) {
+export function Projectile({ launch, wind, terrain, targetTanks, onImpact }: ProjectileProps) {
   const positionRef = useRef<Vec3>({ ...launch.start });
   const velocityRef = useRef<Vec3>({ ...launch.velocity });
   const trailRef = useRef<Vec3[]>([{ ...launch.start }]);
@@ -66,15 +64,16 @@ export function Projectile({ launch, wind, terrain, targetTank, onImpact }: Proj
 
     const groundPosition = groundFromWorld(position);
     const terrainHeight = terrainHeightAt(terrain, groundPosition);
-    const targetDistance = vec3Distance(position, getTankCenter(targetTank));
+    const hitTank = targetTanks.some(
+      (t) => t.hp > 0 && vec3Distance(position, getTankCenter(t)) <= TANK_HIT_RADIUS,
+    );
     const hitTerrain = position.y <= terrainHeight + 0.08;
-    const hitTank = targetDistance <= TANK_HIT_RADIUS;
     const expired = elapsedRef.current >= PROJECTILE_MAX_FLIGHT_TIME;
     const leftArena =
-      groundPosition.x < GROUND_MIN_X - 4 ||
-      groundPosition.x > GROUND_MAX_X + 4 ||
-      groundPosition.y < GROUND_MIN_Y - 4 ||
-      groundPosition.y > GROUND_MAX_Y + 4;
+      groundPosition.x < terrain.minX - 4 ||
+      groundPosition.x > terrainMaxX(terrain) + 4 ||
+      groundPosition.y < terrain.minY - 4 ||
+      groundPosition.y > terrainMaxY(terrain) + 4;
 
     if (hitTerrain || hitTank || leftArena || expired) {
       impactedRef.current = true;

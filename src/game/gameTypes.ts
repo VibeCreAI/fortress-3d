@@ -5,6 +5,7 @@ export type GamePhase =
   | "projectileFlying"
   | "exploding"
   | "turnTransition"
+  | "stageClear"
   | "gameOver";
 
 export type GroundPos = {

@@ -96,6 +96,29 @@ button {
   letter-spacing: 0;
 }
 
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #f3f8ff;
+  background: linear-gradient(135deg, #2c5fa0, #4b7fc8);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.hp-row-active .hp-label {
+  color: #b94a3a;
+}
+
+.hp-row-active .hp-track {
+  border-color: rgba(185, 74, 58, 0.55);
+  box-shadow: 0 0 0 2px rgba(185, 74, 58, 0.2);
+}
+
 .hp-row {
   display: grid;
   grid-template-columns: 80px 1fr 36px;
