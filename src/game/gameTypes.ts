@@ -7,7 +7,7 @@ export type GamePhase =
   | "turnTransition"
   | "gameOver";
 
-export type CameraMode = "firstPerson" | "thirdPerson";
+export type CameraMode = "firstPerson" | "thirdPerson" | "omniscient";
 
 export type GroundPos = {
   x: number;

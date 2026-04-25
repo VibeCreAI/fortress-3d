@@ -6,11 +6,16 @@ import {
   FIRST_PERSON_DEFAULT_FOV,
   FIRST_PERSON_MAX_FOV,
   FIRST_PERSON_MIN_FOV,
+  KEYBOARD_AIM_ELEVATION_STEP,
+  KEYBOARD_AIM_YAW_STEP,
   MAX_ELEVATION,
   MAX_POWER,
   MIN_ELEVATION,
   MIN_POWER,
   MOVEMENT_PER_TURN,
+  OMNISCIENT_DEFAULT_DISTANCE,
+  OMNISCIENT_MAX_DISTANCE,
+  OMNISCIENT_MIN_DISTANCE,
   PLAYER_MOVE_STEP,
   PLAYER_START_POSITION,
   STARTING_HP,
@@ -91,6 +96,7 @@ export default function App() {
   const [cameraMode, setCameraMode] = useState<CameraMode>("firstPerson");
   const [zoomFov, setZoomFov] = useState(FIRST_PERSON_DEFAULT_FOV);
   const [thirdPersonDistance, setThirdPersonDistance] = useState(THIRD_PERSON_DEFAULT_DISTANCE);
+  const [omniscientDistance, setOmniscientDistance] = useState(OMNISCIENT_DEFAULT_DISTANCE);
   const projectileIdRef = useRef(1);
   const explosionIdRef = useRef(1);
 
@@ -139,6 +145,7 @@ export default function App() {
     setCameraMode("firstPerson");
     setZoomFov(FIRST_PERSON_DEFAULT_FOV);
     setThirdPersonDistance(THIRD_PERSON_DEFAULT_DISTANCE);
+    setOmniscientDistance(OMNISCIENT_DEFAULT_DISTANCE);
     projectileIdRef.current = 1;
     explosionIdRef.current = 1;
   }, []);
@@ -148,7 +155,17 @@ export default function App() {
       return;
     }
 
-    setCameraMode((mode) => (mode === "firstPerson" ? "thirdPerson" : "firstPerson"));
+    setCameraMode((mode) => {
+      if (mode === "firstPerson") {
+        return "thirdPerson";
+      }
+
+      if (mode === "thirdPerson") {
+        return "omniscient";
+      }
+
+      return "firstPerson";
+    });
   }, [canPlayerAct]);
 
   const fireTank = useCallback((owner: TurnOwner, overrideTank?: TankState) => {
@@ -212,6 +229,17 @@ export default function App() {
     setPlayerTank((tank) => ({
       ...tank,
       elevation: clamp(tank.elevation + delta, MIN_ELEVATION, MAX_ELEVATION),
+    }));
+  }, [canPlayerAct]);
+
+  const adjustTurretYaw = useCallback((delta: number) => {
+    if (!canPlayerAct) {
+      return;
+    }
+
+    setPlayerTank((tank) => ({
+      ...tank,
+      turretYaw: normalizeDegrees(tank.turretYaw + delta),
     }));
   }, [canPlayerAct]);
 
@@ -332,6 +360,13 @@ export default function App() {
         return;
       }
 
+      if (cameraMode === "omniscient") {
+        setOmniscientDistance((value) =>
+          clamp(value + event.deltaY * 0.04, OMNISCIENT_MIN_DISTANCE, OMNISCIENT_MAX_DISTANCE),
+        );
+        return;
+      }
+
       setZoomFov((value) => clamp(value + event.deltaY * 0.035, FIRST_PERSON_MIN_FOV, FIRST_PERSON_MAX_FOV));
     };
 
@@ -409,13 +444,23 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+      const externalAimKey =
+        cameraMode !== "firstPerson" && ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key);
 
-      if (["a", "d", "w", "s", "q", "e", "c", " "].includes(key)) {
+      if (["a", "d", "w", "s", "q", "e", "c", " "].includes(key) || externalAimKey) {
         event.preventDefault();
       }
 
       if (key === "c") {
         toggleCameraMode();
+      } else if (externalAimKey && key === "arrowleft") {
+        adjustTurretYaw(-KEYBOARD_AIM_YAW_STEP);
+      } else if (externalAimKey && key === "arrowright") {
+        adjustTurretYaw(KEYBOARD_AIM_YAW_STEP);
+      } else if (externalAimKey && key === "arrowup") {
+        adjustElevation(KEYBOARD_AIM_ELEVATION_STEP);
+      } else if (externalAimKey && key === "arrowdown") {
+        adjustElevation(-KEYBOARD_AIM_ELEVATION_STEP);
       } else if (key === "a") {
         movePlayer(-1, 0);
       } else if (key === "d") {
@@ -437,7 +482,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [adjustPower, firePlayer, movePlayer, toggleCameraMode]);
+  }, [adjustElevation, adjustPower, adjustTurretYaw, cameraMode, firePlayer, movePlayer, toggleCameraMode]);
 
   const activeSceneState = useMemo(
     () => ({
@@ -450,6 +495,7 @@ export default function App() {
       cameraMode,
       zoomFov,
       thirdPersonDistance,
+      omniscientDistance,
       aimInputActive,
       projectile,
       explosion,
@@ -459,6 +505,7 @@ export default function App() {
       cameraMode,
       computerTank,
       explosion,
+      omniscientDistance,
       phase,
       playerTank,
       projectile,
@@ -492,6 +539,7 @@ export default function App() {
         cameraMode={cameraMode}
         zoomFov={zoomFov}
         thirdPersonDistance={thirdPersonDistance}
+        omniscientDistance={omniscientDistance}
         onCameraModeToggle={toggleCameraMode}
         onElevationChange={adjustElevation}
         onPowerChange={adjustPower}

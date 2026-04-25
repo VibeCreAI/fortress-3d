@@ -29,6 +29,7 @@ type GameHUDProps = {
   cameraMode: CameraMode;
   zoomFov: number;
   thirdPersonDistance: number;
+  omniscientDistance: number;
   onCameraModeToggle: () => void;
   onElevationChange: (delta: number) => void;
   onPowerChange: (delta: number) => void;
@@ -60,6 +61,18 @@ function turnText(turnOwner: TurnOwner, phase: GamePhase, winner: TurnOwner | nu
   return "Player aiming";
 }
 
+function cameraModeLabel(cameraMode: CameraMode) {
+  if (cameraMode === "firstPerson") {
+    return "First person";
+  }
+
+  if (cameraMode === "thirdPerson") {
+    return "Third person";
+  }
+
+  return "Omniscient";
+}
+
 export function GameHUD({
   playerTank,
   computerTank,
@@ -73,6 +86,7 @@ export function GameHUD({
   cameraMode,
   zoomFov,
   thirdPersonDistance,
+  omniscientDistance,
   onCameraModeToggle,
   onElevationChange,
   onPowerChange,
@@ -80,10 +94,19 @@ export function GameHUD({
   onReset,
 }: GameHUDProps) {
   const disableControls = !canPlayerAct;
-  const aimStatus = aimInputActive ? "Mouse aim locked" : "Click arena to aim";
-  const cameraLabel = cameraMode === "firstPerson" ? "First person" : "Third person";
-  const zoomLabel = cameraMode === "firstPerson" ? "FOV" : "Dist";
-  const zoomValue = cameraMode === "firstPerson" ? `${Math.round(zoomFov)} fov` : `${thirdPersonDistance.toFixed(1)} m`;
+  const cameraLabel = cameraModeLabel(cameraMode);
+  const aimStatus = aimInputActive
+    ? "Mouse aim locked"
+    : cameraMode === "firstPerson"
+      ? "Click arena to aim"
+      : "Mouse or arrows aim";
+  const zoomLabel = cameraMode === "firstPerson" ? "FOV" : cameraMode === "thirdPerson" ? "Dist" : "Height";
+  const zoomValue =
+    cameraMode === "firstPerson"
+      ? `${Math.round(zoomFov)} fov`
+      : cameraMode === "thirdPerson"
+        ? `${thirdPersonDistance.toFixed(1)} m`
+        : `${omniscientDistance.toFixed(1)} m`;
 
   return (
     <div className="hud-layer">
@@ -203,6 +226,7 @@ export function GameHUD({
       <div className="bottom-hint">
         <span>WASD move X/Y</span>
         <span>Mouse aim</span>
+        <span>Arrows aim</span>
         <span>Wheel zoom</span>
         <span>C camera</span>
         <span>Q/E power</span>

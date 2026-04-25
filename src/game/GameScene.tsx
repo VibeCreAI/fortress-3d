@@ -40,6 +40,7 @@ type GameSceneProps = {
   cameraMode: CameraMode;
   zoomFov: number;
   thirdPersonDistance: number;
+  omniscientDistance: number;
   aimInputActive: boolean;
   projectile: ProjectileLaunch | null;
   explosion: ExplosionState | null;
@@ -65,9 +66,18 @@ function CameraRig({
   cameraMode,
   zoomFov,
   thirdPersonDistance,
+  omniscientDistance,
 }: Pick<
   GameSceneProps,
-  "terrain" | "playerTank" | "computerTank" | "turnOwner" | "phase" | "cameraMode" | "zoomFov" | "thirdPersonDistance"
+  | "terrain"
+  | "playerTank"
+  | "computerTank"
+  | "turnOwner"
+  | "phase"
+  | "cameraMode"
+  | "zoomFov"
+  | "thirdPersonDistance"
+  | "omniscientDistance"
 >) {
   const { camera, size } = useThree();
   const lookTarget = new THREE.Vector3();
@@ -102,6 +112,25 @@ function CameraRig({
         tankCenter.y + 1.2 + playerTank.elevation * 0.025,
         tankCenter.z + flatForward.z * 10,
       );
+    } else if (playerAiming && cameraMode === "omniscient") {
+      const playerCenter = getTankCenter(playerTank);
+      const computerCenter = getTankCenter(computerTank);
+      const centerX = (playerCenter.x + computerCenter.x) / 2;
+      const centerZ = (playerCenter.z + computerCenter.z) / 2;
+      const centerHeight = Math.max(
+        terrainHeightAt(terrain, playerTank.position),
+        terrainHeightAt(terrain, computerTank.position),
+      );
+      const flatForward = forwardVector(playerTank.turretYaw, 0);
+      const aspect = size.width / size.height;
+      const viewportScale = aspect < 0.75 ? 1.18 : 1;
+
+      targetPosition.set(
+        centerX - flatForward.x * omniscientDistance * 0.12,
+        centerHeight + omniscientDistance * viewportScale,
+        centerZ + omniscientDistance * 0.42 - flatForward.z * omniscientDistance * 0.12,
+      );
+      lookTarget.set(centerX, centerHeight + 0.8, centerZ);
     } else {
       const playerCenter = getTankCenter(playerTank);
       const computerCenter = getTankCenter(computerTank);
@@ -124,9 +153,13 @@ function CameraRig({
           ? zoomFov
           : playerAiming && cameraMode === "thirdPerson"
             ? 50
-            : size.width / size.height < 0.75
-              ? 68
-              : 48;
+            : playerAiming && cameraMode === "omniscient"
+              ? size.width / size.height < 0.75
+                ? 58
+                : 44
+              : size.width / size.height < 0.75
+                ? 68
+                : 48;
       if (Math.abs(camera.fov - targetFov) > 0.05) {
         camera.fov += (targetFov - camera.fov) * 0.18;
         camera.updateProjectionMatrix();
@@ -154,6 +187,7 @@ export function GameScene({
   cameraMode,
   zoomFov,
   thirdPersonDistance,
+  omniscientDistance,
   aimInputActive,
   projectile,
   explosion,
@@ -186,6 +220,7 @@ export function GameScene({
         cameraMode={cameraMode}
         zoomFov={zoomFov}
         thirdPersonDistance={thirdPersonDistance}
+        omniscientDistance={omniscientDistance}
       />
       <hemisphereLight args={["#eaf7ff", "#a5734d", 1.12]} />
       <directionalLight

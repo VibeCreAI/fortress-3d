@@ -22,6 +22,8 @@ export const MIN_ELEVATION = 4;
 export const MAX_ELEVATION = 84;
 export const MIN_POWER = 12;
 export const MAX_POWER = 115;
+export const KEYBOARD_AIM_YAW_STEP = 3;
+export const KEYBOARD_AIM_ELEVATION_STEP = 2;
 
 export const TANK_CENTER_HEIGHT = 0.95;
 export const TANK_HIT_RADIUS = 1.55;
@@ -49,3 +51,7 @@ export const FIRST_PERSON_DEFAULT_FOV = 56;
 export const THIRD_PERSON_MIN_DISTANCE = 9;
 export const THIRD_PERSON_MAX_DISTANCE = 26;
 export const THIRD_PERSON_DEFAULT_DISTANCE = 15;
+
+export const OMNISCIENT_MIN_DISTANCE = 26;
+export const OMNISCIENT_MAX_DISTANCE = 58;
+export const OMNISCIENT_DEFAULT_DISTANCE = 38;
