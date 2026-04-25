@@ -3,9 +3,6 @@ import { chooseComputerPlan } from "./game/aiLogic";
 import {
   COMPUTER_START_POSITION,
   EXPLOSION_DURATION_MS,
-  FIRST_PERSON_DEFAULT_FOV,
-  FIRST_PERSON_MAX_FOV,
-  FIRST_PERSON_MIN_FOV,
   KEYBOARD_AIM_ELEVATION_STEP,
   KEYBOARD_AIM_YAW_STEP,
   MAX_ELEVATION,
@@ -19,9 +16,6 @@ import {
   PLAYER_MOVE_STEP,
   PLAYER_START_POSITION,
   STARTING_HP,
-  THIRD_PERSON_DEFAULT_DISTANCE,
-  THIRD_PERSON_MAX_DISTANCE,
-  THIRD_PERSON_MIN_DISTANCE,
 } from "./game/constants";
 import { GameScene } from "./game/GameScene";
 import {
@@ -42,7 +36,6 @@ import {
   yawTo,
 } from "./game/gameMath";
 import type {
-  CameraMode,
   ComputerPlan,
   ExplosionState,
   GamePhase,
@@ -92,28 +85,24 @@ export default function App() {
   const [winner, setWinner] = useState<TurnOwner | null>(null);
   const [pendingTurn, setPendingTurn] = useState<TurnOwner | null>(null);
   const [computerPlan, setComputerPlan] = useState<ComputerPlan | null>(null);
-  const [aimInputActive, setAimInputActive] = useState(false);
-  const [cameraMode, setCameraMode] = useState<CameraMode>("firstPerson");
-  const [zoomFov, setZoomFov] = useState(FIRST_PERSON_DEFAULT_FOV);
-  const [thirdPersonDistance, setThirdPersonDistance] = useState(THIRD_PERSON_DEFAULT_DISTANCE);
   const [omniscientDistance, setOmniscientDistance] = useState(OMNISCIENT_DEFAULT_DISTANCE);
   const projectileIdRef = useRef(1);
   const explosionIdRef = useRef(1);
 
   const canPlayerAct = turnOwner === "player" && phase === "aiming" && !winner;
 
-  const beginTurn = useCallback((owner: TurnOwner) => {
-    if (document.pointerLockElement) {
-      document.exitPointerLock();
-    }
+  const omnRef = useRef({ yaw: 10, pitch: 60, panX: 0, panZ: 0, distance: OMNISCIENT_DEFAULT_DISTANCE });
+  omnRef.current.distance = omniscientDistance;
+  const canPlayerActRef = useRef(false);
+  canPlayerActRef.current = canPlayerAct;
 
+  const beginTurn = useCallback((owner: TurnOwner) => {
     setTurnOwner(owner);
     setWind(createWind());
     setProjectile(null);
     setExplosion(null);
     setPendingTurn(null);
     setComputerPlan(null);
-    setAimInputActive(false);
 
     if (owner === "player") {
       setPlayerTank((tank) => snapTankToTerrain({ ...tank, movementRemaining: MOVEMENT_PER_TURN }, terrain));
@@ -125,10 +114,6 @@ export default function App() {
   }, [terrain]);
 
   const resetGame = useCallback(() => {
-    if (document.pointerLockElement) {
-      document.exitPointerLock();
-    }
-
     const nextGame = makeInitialGame();
     setTerrain(nextGame.terrain);
     setPlayerTank(nextGame.playerTank);
@@ -141,32 +126,15 @@ export default function App() {
     setWinner(null);
     setPendingTurn(null);
     setComputerPlan(null);
-    setAimInputActive(false);
-    setCameraMode("firstPerson");
-    setZoomFov(FIRST_PERSON_DEFAULT_FOV);
-    setThirdPersonDistance(THIRD_PERSON_DEFAULT_DISTANCE);
     setOmniscientDistance(OMNISCIENT_DEFAULT_DISTANCE);
+    omnRef.current.yaw = 10;
+    omnRef.current.pitch = 60;
+    omnRef.current.panX = 0;
+    omnRef.current.panZ = 0;
+    omnRef.current.distance = OMNISCIENT_DEFAULT_DISTANCE;
     projectileIdRef.current = 1;
     explosionIdRef.current = 1;
   }, []);
-
-  const toggleCameraMode = useCallback(() => {
-    if (!canPlayerAct) {
-      return;
-    }
-
-    setCameraMode((mode) => {
-      if (mode === "firstPerson") {
-        return "thirdPerson";
-      }
-
-      if (mode === "thirdPerson") {
-        return "omniscient";
-      }
-
-      return "firstPerson";
-    });
-  }, [canPlayerAct]);
 
   const fireTank = useCallback((owner: TurnOwner, overrideTank?: TankState) => {
     const shooter = overrideTank ?? (owner === "player" ? playerTank : computerTank);
@@ -179,10 +147,6 @@ export default function App() {
     });
     projectileIdRef.current += 1;
     setExplosion(null);
-    setAimInputActive(false);
-    if (document.pointerLockElement) {
-      document.exitPointerLock();
-    }
     setPhase("projectileFlying");
   }, [computerTank, playerTank]);
 
@@ -262,14 +226,6 @@ export default function App() {
     fireTank("player");
   }, [canPlayerAct, fireTank]);
 
-  const activateAimInput = useCallback((event: MouseEvent) => {
-    if (!canPlayerAct || !(event.target instanceof HTMLCanvasElement)) {
-      return;
-    }
-
-    event.target.requestPointerLock();
-  }, [canPlayerAct]);
-
   const resolveProjectileImpact = useCallback((impact: Vec3) => {
     if (!projectile) {
       return;
@@ -318,61 +274,35 @@ export default function App() {
   }, [computerTank, playerTank, projectile, terrain]);
 
   useEffect(() => {
-    const handlePointerLockChange = () => {
-      const locked = document.pointerLockElement instanceof HTMLCanvasElement;
-      setAimInputActive(locked && canPlayerAct);
-    };
-
-    document.addEventListener("pointerlockchange", handlePointerLockChange);
-    return () => document.removeEventListener("pointerlockchange", handlePointerLockChange);
-  }, [canPlayerAct]);
-
-  useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
-      const dragAiming = event.buttons === 1;
-      if ((!aimInputActive && !dragAiming) || !canPlayerAct) {
-        return;
+      if (event.buttons === 1) {
+        omnRef.current.yaw = normalizeDegrees(omnRef.current.yaw + event.movementX * 0.35);
+        omnRef.current.pitch = clamp(omnRef.current.pitch - event.movementY * 0.25, 8, 88);
+      } else if (event.buttons === 2) {
+        const yawRad = omnRef.current.yaw * Math.PI / 180;
+        const speed = omnRef.current.distance * 0.006;
+        omnRef.current.panX += (Math.cos(yawRad) * event.movementX + Math.sin(yawRad) * event.movementY) * speed;
+        omnRef.current.panZ += (-Math.sin(yawRad) * event.movementX + Math.cos(yawRad) * event.movementY) * speed;
       }
-
-      setPlayerTank((tank) => ({
-        ...tank,
-        turretYaw: normalizeDegrees(tank.turretYaw + event.movementX * 0.18),
-        elevation: clamp(tank.elevation - event.movementY * 0.14, MIN_ELEVATION, MAX_ELEVATION),
-      }));
     };
 
     document.addEventListener("mousemove", handleMouseMove);
     return () => document.removeEventListener("mousemove", handleMouseMove);
-  }, [aimInputActive, canPlayerAct]);
+  }, []);
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
-      if (!canPlayerAct) {
-        return;
-      }
-
       event.preventDefault();
-
-      if (cameraMode === "thirdPerson") {
-        setThirdPersonDistance((value) =>
-          clamp(value + event.deltaY * 0.02, THIRD_PERSON_MIN_DISTANCE, THIRD_PERSON_MAX_DISTANCE),
-        );
-        return;
-      }
-
-      if (cameraMode === "omniscient") {
-        setOmniscientDistance((value) =>
-          clamp(value + event.deltaY * 0.04, OMNISCIENT_MIN_DISTANCE, OMNISCIENT_MAX_DISTANCE),
-        );
-        return;
-      }
-
-      setZoomFov((value) => clamp(value + event.deltaY * 0.035, FIRST_PERSON_MIN_FOV, FIRST_PERSON_MAX_FOV));
+      setOmniscientDistance((value) => {
+        const next = clamp(value + event.deltaY * 0.04, OMNISCIENT_MIN_DISTANCE, OMNISCIENT_MAX_DISTANCE);
+        omnRef.current.distance = next;
+        return next;
+      });
     };
 
     window.addEventListener("wheel", handleWheel, { passive: false });
     return () => window.removeEventListener("wheel", handleWheel);
-  }, [cameraMode, canPlayerAct]);
+  }, []);
 
   useEffect(() => {
     if (phase !== "exploding" || !explosion) {
@@ -444,45 +374,44 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      const externalAimKey =
-        cameraMode !== "firstPerson" && ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key);
+      const isAimKey = ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key);
 
-      if (["a", "d", "w", "s", "q", "e", "c", " "].includes(key) || externalAimKey) {
+      if (["a", "d", "w", "s", "q", "e", " "].includes(key) || isAimKey) {
         event.preventDefault();
       }
 
-      if (key === "c") {
-        toggleCameraMode();
-      } else if (externalAimKey && key === "arrowleft") {
+      if (isAimKey && key === "arrowleft") {
         adjustTurretYaw(-KEYBOARD_AIM_YAW_STEP);
-      } else if (externalAimKey && key === "arrowright") {
+      } else if (isAimKey && key === "arrowright") {
         adjustTurretYaw(KEYBOARD_AIM_YAW_STEP);
-      } else if (externalAimKey && key === "arrowup") {
+      } else if (isAimKey && key === "arrowup") {
         adjustElevation(KEYBOARD_AIM_ELEVATION_STEP);
-      } else if (externalAimKey && key === "arrowdown") {
+      } else if (isAimKey && key === "arrowdown") {
         adjustElevation(-KEYBOARD_AIM_ELEVATION_STEP);
       } else if (key === "a") {
-        movePlayer(-1, 0);
+        const yaw = omnRef.current.yaw * Math.PI / 180;
+        movePlayer(-Math.cos(yaw), Math.sin(yaw));
       } else if (key === "d") {
-        movePlayer(1, 0);
+        const yaw = omnRef.current.yaw * Math.PI / 180;
+        movePlayer(Math.cos(yaw), -Math.sin(yaw));
       } else if (key === "w") {
-        movePlayer(0, 1);
+        const yaw = omnRef.current.yaw * Math.PI / 180;
+        movePlayer(-Math.sin(yaw), -Math.cos(yaw));
       } else if (key === "s") {
-        movePlayer(0, -1);
+        const yaw = omnRef.current.yaw * Math.PI / 180;
+        movePlayer(Math.sin(yaw), Math.cos(yaw));
       } else if (key === "q") {
         adjustPower(-3);
       } else if (key === "e") {
         adjustPower(3);
       } else if (key === " ") {
         firePlayer();
-      } else if (key === "escape" && document.pointerLockElement) {
-        document.exitPointerLock();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [adjustElevation, adjustPower, adjustTurretYaw, cameraMode, firePlayer, movePlayer, toggleCameraMode]);
+  }, [adjustElevation, adjustPower, adjustTurretYaw, firePlayer, movePlayer]);
 
   const activeSceneState = useMemo(
     () => ({
@@ -492,28 +421,22 @@ export default function App() {
       turnOwner,
       phase,
       wind,
-      cameraMode,
-      zoomFov,
-      thirdPersonDistance,
       omniscientDistance,
-      aimInputActive,
       projectile,
       explosion,
+      omnRef,
     }),
     [
-      aimInputActive,
-      cameraMode,
       computerTank,
       explosion,
+      omnRef,
       omniscientDistance,
       phase,
       playerTank,
       projectile,
       terrain,
-      thirdPersonDistance,
       turnOwner,
       wind,
-      zoomFov,
     ],
   );
 
@@ -523,7 +446,6 @@ export default function App() {
         <GameScene
           {...activeSceneState}
           onProjectileImpact={resolveProjectileImpact}
-          onCanvasAimClick={activateAimInput}
         />
       </div>
       <GameHUD
@@ -535,12 +457,7 @@ export default function App() {
         winner={winner}
         lastExplosion={explosion}
         canPlayerAct={canPlayerAct}
-        aimInputActive={aimInputActive}
-        cameraMode={cameraMode}
-        zoomFov={zoomFov}
-        thirdPersonDistance={thirdPersonDistance}
         omniscientDistance={omniscientDistance}
-        onCameraModeToggle={toggleCameraMode}
         onElevationChange={adjustElevation}
         onPowerChange={adjustPower}
         onFire={firePlayer}

@@ -1,5 +1,4 @@
 import {
-  Camera,
   ChevronDown,
   ChevronUp,
   Compass,
@@ -7,14 +6,13 @@ import {
   Gauge,
   HeartPulse,
   Minus,
-  MousePointer2,
   MoveHorizontal,
   Plus,
   RefreshCcw,
   Wind as WindIcon,
   ZoomIn,
 } from "lucide-react";
-import type { CameraMode, ExplosionState, GamePhase, TankState, TurnOwner, Wind } from "../game/gameTypes";
+import type { ExplosionState, GamePhase, TankState, TurnOwner, Wind } from "../game/gameTypes";
 
 type GameHUDProps = {
   playerTank: TankState;
@@ -25,12 +23,7 @@ type GameHUDProps = {
   winner: TurnOwner | null;
   lastExplosion: ExplosionState | null;
   canPlayerAct: boolean;
-  aimInputActive: boolean;
-  cameraMode: CameraMode;
-  zoomFov: number;
-  thirdPersonDistance: number;
   omniscientDistance: number;
-  onCameraModeToggle: () => void;
   onElevationChange: (delta: number) => void;
   onPowerChange: (delta: number) => void;
   onFire: () => void;
@@ -61,18 +54,6 @@ function turnText(turnOwner: TurnOwner, phase: GamePhase, winner: TurnOwner | nu
   return "Player aiming";
 }
 
-function cameraModeLabel(cameraMode: CameraMode) {
-  if (cameraMode === "firstPerson") {
-    return "First person";
-  }
-
-  if (cameraMode === "thirdPerson") {
-    return "Third person";
-  }
-
-  return "Omniscient";
-}
-
 export function GameHUD({
   playerTank,
   computerTank,
@@ -82,31 +63,13 @@ export function GameHUD({
   winner,
   lastExplosion,
   canPlayerAct,
-  aimInputActive,
-  cameraMode,
-  zoomFov,
-  thirdPersonDistance,
   omniscientDistance,
-  onCameraModeToggle,
   onElevationChange,
   onPowerChange,
   onFire,
   onReset,
 }: GameHUDProps) {
   const disableControls = !canPlayerAct;
-  const cameraLabel = cameraModeLabel(cameraMode);
-  const aimStatus = aimInputActive
-    ? "Mouse aim locked"
-    : cameraMode === "firstPerson"
-      ? "Click arena to aim"
-      : "Mouse or arrows aim";
-  const zoomLabel = cameraMode === "firstPerson" ? "FOV" : cameraMode === "thirdPerson" ? "Dist" : "Height";
-  const zoomValue =
-    cameraMode === "firstPerson"
-      ? `${Math.round(zoomFov)} fov`
-      : cameraMode === "thirdPerson"
-        ? `${thirdPersonDistance.toFixed(1)} m`
-        : `${omniscientDistance.toFixed(1)} m`;
 
   return (
     <div className="hud-layer">
@@ -142,20 +105,6 @@ export function GameHUD({
       </section>
 
       <section className="aim-panel hud-panel">
-        <div className="aim-lock-row">
-          <MousePointer2 size={16} />
-          {aimStatus}
-          <button
-            type="button"
-            className="camera-toggle-button"
-            disabled={!canPlayerAct}
-            onClick={onCameraModeToggle}
-            title="Toggle camera"
-          >
-            <Camera size={15} />
-            {cameraLabel}
-          </button>
-        </div>
         <div className="stat-grid three-d-stat-grid">
           <div className="stat-cell">
             <Compass size={17} />
@@ -186,8 +135,8 @@ export function GameHUD({
           </div>
           <div className="stat-cell">
             <ZoomIn size={17} />
-            <span>{zoomLabel}</span>
-            <strong>{zoomValue}</strong>
+            <span>Height</span>
+            <strong>{omniscientDistance.toFixed(1)} m</strong>
           </div>
           <div className="stat-cell">
             <MoveHorizontal size={17} />
@@ -224,14 +173,13 @@ export function GameHUD({
       </section>
 
       <div className="bottom-hint">
-        <span>WASD move X/Y</span>
-        <span>Mouse aim</span>
-        <span>Arrows aim</span>
-        <span>Wheel zoom</span>
-        <span>C camera</span>
-        <span>Q/E power</span>
-        <span>Space fire</span>
-        <span>Esc release</span>
+        <span>WASD 이동</span>
+        <span>방향키 조준</span>
+        <span>Q/E 화력</span>
+        <span>Space 발사</span>
+        <span>좌클릭 드래그 회전</span>
+        <span>우클릭 드래그 이동</span>
+        <span>휠 줌</span>
       </div>
 
       {winner && (
