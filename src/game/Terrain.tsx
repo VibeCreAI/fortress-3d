@@ -20,12 +20,6 @@ const rocks = [
   { x: 18, y: -4, s: 0.5 },
 ];
 
-const clouds = [
-  { x: -13, y: 10.4, z: -16, s: 1 },
-  { x: 2, y: 11.2, z: -18, s: 0.86 },
-  { x: 16, y: 9.6, z: -15, s: 0.74 },
-];
-
 function heightColor(height: number) {
   if (height > 3.3) return "#86d37c";
   if (height > 2.1) return "#78c86f";
@@ -101,28 +95,6 @@ export function Terrain({ terrain }: TerrainProps) {
           </group>
         );
       })}
-
-      {clouds.map((cloud) => (
-        <group key={cloud.x} position={[cloud.x, cloud.y, cloud.z]} scale={cloud.s}>
-          <mesh>
-            <boxGeometry args={[2.1, 0.72, 0.82]} />
-            <meshBasicMaterial color="#f7fbff" />
-          </mesh>
-          <mesh position={[1.05, 0.15, 0]}>
-            <boxGeometry args={[1.4, 0.56, 0.72]} />
-            <meshBasicMaterial color="#f7fbff" />
-          </mesh>
-          <mesh position={[-1.02, -0.05, 0]}>
-            <boxGeometry args={[1.25, 0.48, 0.66]} />
-            <meshBasicMaterial color="#eef6ff" />
-          </mesh>
-        </group>
-      ))}
-
-      <mesh position={[-17, 10.5, -15]}>
-        <sphereGeometry args={[1.15, 20, 20]} />
-        <meshBasicMaterial color="#fff0a6" />
-      </mesh>
     </group>
   );
 }

@@ -1,4 +1,6 @@
+import { useTexture } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Suspense } from "react";
 import * as THREE from "three";
 import {
   CANNON_BASE_HEIGHT,
@@ -44,6 +46,15 @@ type GameSceneProps = {
   onProjectileImpact: (position: Vec3) => void;
   onCanvasAimClick: (event: MouseEvent) => void;
 };
+
+function SkyBackground() {
+  const texture = useTexture("/sky-backdrop.png");
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  return <primitive attach="background" object={texture} />;
+}
 
 function CameraRig({
   terrain,
@@ -162,7 +173,9 @@ export function GameScene({
       onClick={(event) => onCanvasAimClick(event.nativeEvent)}
       className={aimInputActive ? "aim-locked-canvas" : undefined}
     >
-      <color attach="background" args={["#9fdbff"]} />
+      <Suspense fallback={<color attach="background" args={["#9fdbff"]} />}>
+        <SkyBackground />
+      </Suspense>
       <fog attach="fog" args={["#9fdbff", 72, 128]} />
       <CameraRig
         terrain={terrain}
