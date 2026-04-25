@@ -1,4 +1,5 @@
 import {
+  Camera,
   ChevronDown,
   ChevronUp,
   Compass,
@@ -13,7 +14,7 @@ import {
   Wind as WindIcon,
   ZoomIn,
 } from "lucide-react";
-import type { ExplosionState, GamePhase, TankState, TurnOwner, Wind } from "../game/gameTypes";
+import type { CameraMode, ExplosionState, GamePhase, TankState, TurnOwner, Wind } from "../game/gameTypes";
 
 type GameHUDProps = {
   playerTank: TankState;
@@ -25,7 +26,10 @@ type GameHUDProps = {
   lastExplosion: ExplosionState | null;
   canPlayerAct: boolean;
   aimInputActive: boolean;
+  cameraMode: CameraMode;
   zoomFov: number;
+  thirdPersonDistance: number;
+  onCameraModeToggle: () => void;
   onElevationChange: (delta: number) => void;
   onPowerChange: (delta: number) => void;
   onFire: () => void;
@@ -66,7 +70,10 @@ export function GameHUD({
   lastExplosion,
   canPlayerAct,
   aimInputActive,
+  cameraMode,
   zoomFov,
+  thirdPersonDistance,
+  onCameraModeToggle,
   onElevationChange,
   onPowerChange,
   onFire,
@@ -74,6 +81,9 @@ export function GameHUD({
 }: GameHUDProps) {
   const disableControls = !canPlayerAct;
   const aimStatus = aimInputActive ? "Mouse aim locked" : "Click arena to aim";
+  const cameraLabel = cameraMode === "firstPerson" ? "First person" : "Third person";
+  const zoomLabel = cameraMode === "firstPerson" ? "FOV" : "Dist";
+  const zoomValue = cameraMode === "firstPerson" ? `${Math.round(zoomFov)} fov` : `${thirdPersonDistance.toFixed(1)} m`;
 
   return (
     <div className="hud-layer">
@@ -112,6 +122,16 @@ export function GameHUD({
         <div className="aim-lock-row">
           <MousePointer2 size={16} />
           {aimStatus}
+          <button
+            type="button"
+            className="camera-toggle-button"
+            disabled={!canPlayerAct}
+            onClick={onCameraModeToggle}
+            title="Toggle camera"
+          >
+            <Camera size={15} />
+            {cameraLabel}
+          </button>
         </div>
         <div className="stat-grid three-d-stat-grid">
           <div className="stat-cell">
@@ -143,8 +163,8 @@ export function GameHUD({
           </div>
           <div className="stat-cell">
             <ZoomIn size={17} />
-            <span>Zoom</span>
-            <strong>{Math.round(zoomFov)} fov</strong>
+            <span>{zoomLabel}</span>
+            <strong>{zoomValue}</strong>
           </div>
           <div className="stat-cell">
             <MoveHorizontal size={17} />
@@ -184,6 +204,7 @@ export function GameHUD({
         <span>WASD move X/Y</span>
         <span>Mouse aim</span>
         <span>Wheel zoom</span>
+        <span>C camera</span>
         <span>Q/E power</span>
         <span>Space fire</span>
         <span>Esc release</span>

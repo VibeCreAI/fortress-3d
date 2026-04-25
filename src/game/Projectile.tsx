@@ -7,6 +7,7 @@ import {
   GROUND_MIN_X,
   GROUND_MIN_Y,
   GRAVITY,
+  PROJECTILE_MAX_FLIGHT_TIME,
   TANK_HIT_RADIUS,
 } from "./constants";
 import {
@@ -31,6 +32,7 @@ export function Projectile({ launch, wind, terrain, targetTank, onImpact }: Proj
   const velocityRef = useRef<Vec3>({ ...launch.velocity });
   const trailRef = useRef<Vec3[]>([{ ...launch.start }]);
   const impactedRef = useRef(false);
+  const elapsedRef = useRef(0);
   const [renderPosition, setRenderPosition] = useState<Vec3>({ ...launch.start });
   const [trail, setTrail] = useState<Vec3[]>([{ ...launch.start }]);
 
@@ -39,6 +41,7 @@ export function Projectile({ launch, wind, terrain, targetTank, onImpact }: Proj
     velocityRef.current = { ...launch.velocity };
     trailRef.current = [{ ...launch.start }];
     impactedRef.current = false;
+    elapsedRef.current = 0;
     setRenderPosition({ ...launch.start });
     setTrail([{ ...launch.start }]);
   }, [launch.id, launch.start, launch.velocity]);
@@ -49,6 +52,7 @@ export function Projectile({ launch, wind, terrain, targetTank, onImpact }: Proj
     }
 
     const dt = Math.min(delta, 0.033);
+    elapsedRef.current += dt;
     const windAccel = windAcceleration(wind);
     const velocity = velocityRef.current;
     const position = positionRef.current;
@@ -65,17 +69,18 @@ export function Projectile({ launch, wind, terrain, targetTank, onImpact }: Proj
     const targetDistance = vec3Distance(position, getTankCenter(targetTank));
     const hitTerrain = position.y <= terrainHeight + 0.08;
     const hitTank = targetDistance <= TANK_HIT_RADIUS;
+    const expired = elapsedRef.current >= PROJECTILE_MAX_FLIGHT_TIME;
     const leftArena =
       groundPosition.x < GROUND_MIN_X - 4 ||
       groundPosition.x > GROUND_MAX_X + 4 ||
       groundPosition.y < GROUND_MIN_Y - 4 ||
       groundPosition.y > GROUND_MAX_Y + 4;
 
-    if (hitTerrain || hitTank || leftArena) {
+    if (hitTerrain || hitTank || leftArena || expired) {
       impactedRef.current = true;
       onImpact({
         x: position.x,
-        y: Math.max(position.y, terrainHeight + 0.12),
+        y: expired ? terrainHeight + 0.12 : Math.max(position.y, terrainHeight + 0.12),
         z: position.z,
       });
       return;

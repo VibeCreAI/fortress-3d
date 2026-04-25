@@ -17,6 +17,7 @@ import {
   worldFromGround,
 } from "./gameMath";
 import type {
+  CameraMode,
   ExplosionState,
   GamePhase,
   ProjectileLaunch,
@@ -34,7 +35,9 @@ type GameSceneProps = {
   turnOwner: TurnOwner;
   phase: GamePhase;
   wind: Wind;
+  cameraMode: CameraMode;
   zoomFov: number;
+  thirdPersonDistance: number;
   aimInputActive: boolean;
   projectile: ProjectileLaunch | null;
   explosion: ExplosionState | null;
@@ -48,8 +51,13 @@ function CameraRig({
   computerTank,
   turnOwner,
   phase,
+  cameraMode,
   zoomFov,
-}: Pick<GameSceneProps, "terrain" | "playerTank" | "computerTank" | "turnOwner" | "phase" | "zoomFov">) {
+  thirdPersonDistance,
+}: Pick<
+  GameSceneProps,
+  "terrain" | "playerTank" | "computerTank" | "turnOwner" | "phase" | "cameraMode" | "zoomFov" | "thirdPersonDistance"
+>) {
   const { camera, size } = useThree();
   const lookTarget = new THREE.Vector3();
   const targetPosition = new THREE.Vector3();
@@ -57,7 +65,7 @@ function CameraRig({
   useFrame(() => {
     const playerAiming = turnOwner === "player" && phase === "aiming";
 
-    if (playerAiming) {
+    if (playerAiming && cameraMode === "firstPerson") {
       const base = worldFromGround(playerTank.position, playerTank.height + CANNON_BASE_HEIGHT + 0.18);
       const flatForward = forwardVector(playerTank.turretYaw, 0);
       const viewElevation = Math.min(22, Math.max(6, playerTank.elevation * 0.55));
@@ -66,6 +74,23 @@ function CameraRig({
 
       targetPosition.set(base.x + cameraOffset.x, base.y + 0.48, base.z + cameraOffset.z);
       lookTarget.set(base.x + aimForward.x * 26, base.y + aimForward.y * 26, base.z + aimForward.z * 26);
+    } else if (playerAiming && cameraMode === "thirdPerson") {
+      const tankCenter = getTankCenter(playerTank);
+      const flatForward = forwardVector(playerTank.turretYaw, 0);
+      const behind = scaleVec3(flatForward, -thirdPersonDistance);
+      const side = new THREE.Vector3(-flatForward.z, 0, flatForward.x).multiplyScalar(2.4);
+      const cameraHeight = clampThirdPersonHeight(thirdPersonDistance);
+
+      targetPosition.set(
+        tankCenter.x + behind.x + side.x,
+        tankCenter.y + cameraHeight,
+        tankCenter.z + behind.z + side.z,
+      );
+      lookTarget.set(
+        tankCenter.x + flatForward.x * 10,
+        tankCenter.y + 1.2 + playerTank.elevation * 0.025,
+        tankCenter.z + flatForward.z * 10,
+      );
     } else {
       const playerCenter = getTankCenter(playerTank);
       const computerCenter = getTankCenter(computerTank);
@@ -83,7 +108,14 @@ function CameraRig({
     }
 
     if (camera instanceof THREE.PerspectiveCamera) {
-      const targetFov = playerAiming ? zoomFov : size.width / size.height < 0.75 ? 68 : 48;
+      const targetFov =
+        playerAiming && cameraMode === "firstPerson"
+          ? zoomFov
+          : playerAiming && cameraMode === "thirdPerson"
+            ? 50
+            : size.width / size.height < 0.75
+              ? 68
+              : 48;
       if (Math.abs(camera.fov - targetFov) > 0.05) {
         camera.fov += (targetFov - camera.fov) * 0.18;
         camera.updateProjectionMatrix();
@@ -97,6 +129,10 @@ function CameraRig({
   return null;
 }
 
+function clampThirdPersonHeight(distance: number) {
+  return THREE.MathUtils.clamp(distance * 0.42, 4.8, 9.5);
+}
+
 export function GameScene({
   terrain,
   playerTank,
@@ -104,7 +140,9 @@ export function GameScene({
   turnOwner,
   phase,
   wind,
+  cameraMode,
   zoomFov,
+  thirdPersonDistance,
   aimInputActive,
   projectile,
   explosion,
@@ -132,7 +170,9 @@ export function GameScene({
         computerTank={computerTank}
         turnOwner={turnOwner}
         phase={phase}
+        cameraMode={cameraMode}
         zoomFov={zoomFov}
+        thirdPersonDistance={thirdPersonDistance}
       />
       <hemisphereLight args={["#eaf7ff", "#a5734d", 1.12]} />
       <directionalLight

@@ -14,6 +14,9 @@ import {
   PLAYER_MOVE_STEP,
   PLAYER_START_POSITION,
   STARTING_HP,
+  THIRD_PERSON_DEFAULT_DISTANCE,
+  THIRD_PERSON_MAX_DISTANCE,
+  THIRD_PERSON_MIN_DISTANCE,
 } from "./game/constants";
 import { GameScene } from "./game/GameScene";
 import {
@@ -34,6 +37,7 @@ import {
   yawTo,
 } from "./game/gameMath";
 import type {
+  CameraMode,
   ComputerPlan,
   ExplosionState,
   GamePhase,
@@ -84,7 +88,9 @@ export default function App() {
   const [pendingTurn, setPendingTurn] = useState<TurnOwner | null>(null);
   const [computerPlan, setComputerPlan] = useState<ComputerPlan | null>(null);
   const [aimInputActive, setAimInputActive] = useState(false);
+  const [cameraMode, setCameraMode] = useState<CameraMode>("firstPerson");
   const [zoomFov, setZoomFov] = useState(FIRST_PERSON_DEFAULT_FOV);
+  const [thirdPersonDistance, setThirdPersonDistance] = useState(THIRD_PERSON_DEFAULT_DISTANCE);
   const projectileIdRef = useRef(1);
   const explosionIdRef = useRef(1);
 
@@ -130,10 +136,20 @@ export default function App() {
     setPendingTurn(null);
     setComputerPlan(null);
     setAimInputActive(false);
+    setCameraMode("firstPerson");
     setZoomFov(FIRST_PERSON_DEFAULT_FOV);
+    setThirdPersonDistance(THIRD_PERSON_DEFAULT_DISTANCE);
     projectileIdRef.current = 1;
     explosionIdRef.current = 1;
   }, []);
+
+  const toggleCameraMode = useCallback(() => {
+    if (!canPlayerAct) {
+      return;
+    }
+
+    setCameraMode((mode) => (mode === "firstPerson" ? "thirdPerson" : "firstPerson"));
+  }, [canPlayerAct]);
 
   const fireTank = useCallback((owner: TurnOwner, overrideTank?: TankState) => {
     const shooter = overrideTank ?? (owner === "player" ? playerTank : computerTank);
@@ -308,12 +324,20 @@ export default function App() {
       }
 
       event.preventDefault();
+
+      if (cameraMode === "thirdPerson") {
+        setThirdPersonDistance((value) =>
+          clamp(value + event.deltaY * 0.02, THIRD_PERSON_MIN_DISTANCE, THIRD_PERSON_MAX_DISTANCE),
+        );
+        return;
+      }
+
       setZoomFov((value) => clamp(value + event.deltaY * 0.035, FIRST_PERSON_MIN_FOV, FIRST_PERSON_MAX_FOV));
     };
 
     window.addEventListener("wheel", handleWheel, { passive: false });
     return () => window.removeEventListener("wheel", handleWheel);
-  }, [canPlayerAct]);
+  }, [cameraMode, canPlayerAct]);
 
   useEffect(() => {
     if (phase !== "exploding" || !explosion) {
@@ -386,11 +410,13 @@ export default function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
-      if (["a", "d", "w", "s", "q", "e", " "].includes(key)) {
+      if (["a", "d", "w", "s", "q", "e", "c", " "].includes(key)) {
         event.preventDefault();
       }
 
-      if (key === "a") {
+      if (key === "c") {
+        toggleCameraMode();
+      } else if (key === "a") {
         movePlayer(-1, 0);
       } else if (key === "d") {
         movePlayer(1, 0);
@@ -411,7 +437,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [adjustPower, firePlayer, movePlayer]);
+  }, [adjustPower, firePlayer, movePlayer, toggleCameraMode]);
 
   const activeSceneState = useMemo(
     () => ({
@@ -421,12 +447,27 @@ export default function App() {
       turnOwner,
       phase,
       wind,
+      cameraMode,
       zoomFov,
+      thirdPersonDistance,
       aimInputActive,
       projectile,
       explosion,
     }),
-    [aimInputActive, computerTank, explosion, phase, playerTank, projectile, terrain, turnOwner, wind, zoomFov],
+    [
+      aimInputActive,
+      cameraMode,
+      computerTank,
+      explosion,
+      phase,
+      playerTank,
+      projectile,
+      terrain,
+      thirdPersonDistance,
+      turnOwner,
+      wind,
+      zoomFov,
+    ],
   );
 
   return (
@@ -448,7 +489,10 @@ export default function App() {
         lastExplosion={explosion}
         canPlayerAct={canPlayerAct}
         aimInputActive={aimInputActive}
+        cameraMode={cameraMode}
         zoomFov={zoomFov}
+        thirdPersonDistance={thirdPersonDistance}
+        onCameraModeToggle={toggleCameraMode}
         onElevationChange={adjustElevation}
         onPowerChange={adjustPower}
         onFire={firePlayer}

@@ -32,6 +32,7 @@ export const CANNON_LENGTH = 2.35;
 export const GRAVITY = 18;
 export const POWER_TO_VELOCITY = 0.34;
 export const WIND_ACCELERATION_SCALE = 0.5;
+export const PROJECTILE_MAX_FLIGHT_TIME = 9;
 
 export const EXPLOSION_RADIUS = 4.2;
 export const MAX_EXPLOSION_DAMAGE = 36;
@@ -44,3 +45,7 @@ export const TRAJECTORY_PREVIEW_STEPS = 18;
 export const FIRST_PERSON_MIN_FOV = 34;
 export const FIRST_PERSON_MAX_FOV = 78;
 export const FIRST_PERSON_DEFAULT_FOV = 56;
+
+export const THIRD_PERSON_MIN_DISTANCE = 9;
+export const THIRD_PERSON_MAX_DISTANCE = 26;
+export const THIRD_PERSON_DEFAULT_DISTANCE = 15;
