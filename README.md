@@ -12,8 +12,8 @@ The current prototype is a local Human vs Computer match built with Vite, React,
 - 3D tank movement on ground X/Y coordinates
 - Projectile arcs affected by gravity and wind
 - Simple destructible terrain craters
-- First-person, third-person, and omniscient aiming camera modes
-- Keyboard, mouse aim, wheel zoom, and HUD controls
+- Omniscient tactical camera with mouse drag, pan, and wheel zoom
+- Keyboard aiming, movement, power, and HUD controls
 
 ## Requirements
 
@@ -77,13 +77,12 @@ npm run preview
 ## Controls
 
 - `W/A/S/D`: Move the player tank on the ground plane
-- Mouse move or drag: Aim turret yaw and cannon elevation
-- Arrow keys: Aim turret yaw and cannon elevation in third-person or omniscient view
-- Mouse wheel: Zoom first-person view or adjust third-person / omniscient camera distance
-- `C`: Cycle first-person / third-person / omniscient camera
+- Arrow keys: Aim turret yaw and cannon elevation
+- Left mouse drag on the battlefield: Rotate camera
+- Right mouse drag on the battlefield: Pan camera
+- Mouse wheel: Adjust omniscient camera distance
 - `Q/E`: Decrease / increase shot power
 - `Space`: Fire
-- `Esc`: Release mouse aim lock
 
 ## Vercel Deployment
 

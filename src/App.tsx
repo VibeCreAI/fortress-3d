@@ -52,6 +52,7 @@ function makeTank(
   position: GroundPos,
   target: GroundPos,
   hp: number = STARTING_HP,
+  maxHp: number = hp,
 ): TankState {
   const yaw = yawTo(position, target);
 
@@ -59,6 +60,7 @@ function makeTank(
     position,
     height: terrainHeightAt(terrain, position),
     hp,
+    maxHp,
     bodyYaw: yaw,
     turretYaw: yaw,
     elevation: 32,
@@ -82,9 +84,10 @@ function buildStage(stage: number, prevPlayerHp?: number): StageState {
     blueprint.playerStart,
     blueprint.enemyStarts[0],
     prevPlayerHp ?? STARTING_HP,
+    STARTING_HP,
   );
   const computerTanks = blueprint.enemyStarts.map((start) =>
-    makeTank(blueprint.terrain, start, blueprint.playerStart, config.enemyHp),
+    makeTank(blueprint.terrain, start, blueprint.playerStart, config.enemyHp, config.enemyHp),
   );
   return {
     stage,
@@ -117,9 +120,8 @@ export default function App() {
   const canPlayerAct = turnOwner === "player" && phase === "aiming" && !winner;
 
   const omnRef = useRef({ yaw: 10, pitch: 60, panX: 0, panZ: 0, distance: OMNISCIENT_DEFAULT_DISTANCE });
+  const cameraDragModeRef = useRef<"rotate" | "pan" | null>(null);
   omnRef.current.distance = omniscientDistance;
-  const canPlayerActRef = useRef(false);
-  canPlayerActRef.current = canPlayerAct;
 
   const otherTanksFor = useCallback(
     (owner: TurnOwner, index: number = 0): TankState[] => {
@@ -374,11 +376,30 @@ export default function App() {
 
   // Mouse: rotate / pan camera
   useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!(event.target instanceof HTMLCanvasElement)) {
+        return;
+      }
+
+      if (event.button === 0) {
+        cameraDragModeRef.current = "rotate";
+        event.preventDefault();
+      } else if (event.button === 2) {
+        cameraDragModeRef.current = "pan";
+        event.preventDefault();
+      }
+    };
+
     const handleMouseMove = (event: MouseEvent) => {
-      if (event.buttons === 1) {
+      if (event.buttons === 0) {
+        cameraDragModeRef.current = null;
+        return;
+      }
+
+      if (cameraDragModeRef.current === "rotate") {
         omnRef.current.yaw = normalizeDegrees(omnRef.current.yaw + event.movementX * 0.35);
         omnRef.current.pitch = clamp(omnRef.current.pitch - event.movementY * 0.25, 8, 88);
-      } else if (event.buttons === 2) {
+      } else if (cameraDragModeRef.current === "pan") {
         const yawRad = (omnRef.current.yaw * Math.PI) / 180;
         const speed = omnRef.current.distance * 0.006;
         omnRef.current.panX +=
@@ -388,8 +409,20 @@ export default function App() {
       }
     };
 
+    const stopCameraDrag = () => {
+      cameraDragModeRef.current = null;
+    };
+
+    document.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("mousemove", handleMouseMove);
-    return () => document.removeEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", stopCameraDrag);
+    window.addEventListener("blur", stopCameraDrag);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", stopCameraDrag);
+      window.removeEventListener("blur", stopCameraDrag);
+    };
   }, []);
 
   // Mouse wheel: zoom

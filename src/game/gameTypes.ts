@@ -39,6 +39,7 @@ export type TankState = {
   position: GroundPos;
   height: number;
   hp: number;
+  maxHp: number;
   bodyYaw: number;
   turretYaw: number;
   elevation: number;

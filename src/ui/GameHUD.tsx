@@ -37,6 +37,10 @@ function hpPercent(hp: number) {
   return `${Math.max(0, Math.min(100, hp))}%`;
 }
 
+function tankHpPercent(tank: TankState) {
+  return hpPercent((tank.hp / Math.max(1, tank.maxHp)) * 100);
+}
+
 function turnText(
   turnOwner: TurnOwner,
   phase: GamePhase,
@@ -89,7 +93,6 @@ export function GameHUD({
 }: GameHUDProps) {
   const disableControls = !canPlayerAct;
   const enemyCount = computerTanks.length;
-  const cpuMaxHp = computerTanks.reduce((m, t) => Math.max(m, t.hp), 0) || 100;
 
   return (
     <div className="hud-layer">
@@ -104,7 +107,7 @@ export function GameHUD({
             Player
           </div>
           <div className="hp-track">
-            <div className="hp-fill player-hp" style={{ width: hpPercent(playerTank.hp) }} />
+            <div className="hp-fill player-hp" style={{ width: tankHpPercent(playerTank) }} />
           </div>
           <span>{Math.round(playerTank.hp)}</span>
         </div>
@@ -121,7 +124,7 @@ export function GameHUD({
                 <div
                   className="hp-fill cpu-hp"
                   style={{
-                    width: hpPercent((tank.hp / Math.max(1, cpuMaxHp)) * 100),
+                    width: tankHpPercent(tank),
                     opacity: tank.hp > 0 ? 1 : 0.3,
                   }}
                 />
@@ -212,7 +215,7 @@ export function GameHUD({
         <span>방향키 조준</span>
         <span>Q/E 화력</span>
         <span>Space 발사</span>
-        <span>좌클릭 드래그 회전</span>
+        <span>마우스 카메라 회전</span>
         <span>우클릭 드래그 이동</span>
         <span>휠 줌</span>
       </div>

@@ -52,11 +52,7 @@ button {
 
 .scene-layer canvas {
   display: block;
-  cursor: crosshair;
-}
-
-.scene-layer canvas.aim-locked-canvas {
-  cursor: none;
+  cursor: grab;
 }
 
 .hud-layer {
