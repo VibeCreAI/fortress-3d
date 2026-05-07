@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chooseComputerPlan } from "./game/aiLogic";
 import {
   EXPLOSION_DURATION_MS,
+  DEFAULT_ELEVATION,
   KEYBOARD_AIM_ELEVATION_STEP,
   KEYBOARD_AIM_YAW_STEP,
   MAX_ELEVATION,
@@ -76,7 +77,7 @@ function makeTank(
     maxHp,
     bodyYaw: yaw,
     turretYaw: yaw,
-    elevation: 32,
+    elevation: DEFAULT_ELEVATION,
     power: 62,
     movementRemaining: MOVEMENT_PER_TURN,
   };

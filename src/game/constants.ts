@@ -20,6 +20,7 @@ export const MAX_TANK_STEP_HEIGHT = 1.05;
 
 export const MIN_ELEVATION = 4;
 export const MAX_ELEVATION = 84;
+export const DEFAULT_ELEVATION = 32;
 export const MIN_POWER = 12;
 export const MAX_POWER = 115;
 export const KEYBOARD_AIM_YAW_STEP = 3;

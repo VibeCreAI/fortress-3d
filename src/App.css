@@ -11,7 +11,9 @@
   --control-blue: #1988ff;
   --control-green: #38b66a;
   --control-red: #ef4f55;
-  --control-surface: rgba(250, 254, 255, 0.9);
+  --control-surface: rgba(250, 254, 255, 0.48);
+  --control-surface-mobile: rgba(250, 254, 255, 0.54);
+  --mobile-control-bottom: max(56px, env(safe-area-inset-bottom, 0px));
   --shadow: 0 14px 34px rgba(30, 52, 65, 0.18);
 }
 
@@ -48,6 +50,15 @@ button {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 42%),
     var(--sky);
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root,
+  .app-shell {
+    height: 100dvh;
+  }
 }
 
 .scene-layer {
@@ -570,6 +581,8 @@ button {
   min-height: 226px;
   padding: 12px;
   background: var(--control-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .aim-card {
@@ -1098,7 +1111,7 @@ button {
   .control-deck {
     left: 8px;
     right: 8px;
-    bottom: 10px;
+    bottom: var(--mobile-control-bottom);
     grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr);
     grid-template-rows: 72px 112px;
     grid-template-areas:
@@ -1113,6 +1126,7 @@ button {
     width: 100%;
     min-width: 0;
     min-height: 190px;
+    background: var(--control-surface-mobile);
   }
 
   .desktop-card-guide {
@@ -1180,7 +1194,7 @@ button {
   .joystick-shell {
     display: block;
     left: 50%;
-    bottom: 10px;
+    bottom: var(--mobile-control-bottom);
     width: 104px;
     transform: translateX(-50%);
   }
@@ -1242,7 +1256,7 @@ button {
 
   .joystick-shell {
     left: 50%;
-    bottom: 8px;
+    bottom: var(--mobile-control-bottom);
     width: 96px;
     transform: translateX(-50%);
   }
@@ -1272,7 +1286,7 @@ button {
   .control-deck {
     left: 8px;
     right: 8px;
-    bottom: 8px;
+    bottom: var(--mobile-control-bottom);
     width: auto;
     grid-template-columns: minmax(190px, 1fr) 104px minmax(190px, 1fr);
     grid-template-rows: 70px 100px;
@@ -1315,7 +1329,7 @@ button {
     display: block;
     left: 50%;
     width: 100px;
-    bottom: 8px;
+    bottom: var(--mobile-control-bottom);
     transform: translateX(-50%);
   }
 

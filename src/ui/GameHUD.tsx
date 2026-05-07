@@ -18,6 +18,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
+  DEFAULT_ELEVATION,
   KEYBOARD_AIM_ELEVATION_STEP,
   KEYBOARD_AIM_YAW_STEP,
   MAX_ELEVATION,
@@ -70,10 +71,14 @@ type AimRangeProps = {
   min: number;
   max: number;
   unit: string;
+  sliderValue?: number;
+  sliderMin?: number;
+  sliderMax?: number;
   disabled: boolean;
   onDecrease: () => void;
   onIncrease: () => void;
   onSet: (value: number) => void;
+  onSliderSet?: (value: number) => void;
 };
 
 type PowerRangeProps = Pick<
@@ -93,6 +98,24 @@ function tankHpPercent(tank: TankState) {
 
 function normalizePercent(value: number, min: number, max: number) {
   return `${Math.max(0, Math.min(100, ((value - min) / Math.max(1, max - min)) * 100))}%`;
+}
+
+function signedAngleOffset(value: number, center: number) {
+  return ((((value - center) % 360) + 540) % 360) - 180;
+}
+
+function valueToCenteredOffset(value: number, center: number, min: number, max: number) {
+  if (value >= center) {
+    return ((value - center) / Math.max(1, max - center)) * 100;
+  }
+  return -((center - value) / Math.max(1, center - min)) * 100;
+}
+
+function centeredOffsetToValue(offset: number, center: number, min: number, max: number) {
+  if (offset >= 0) {
+    return center + (offset / 100) * (max - center);
+  }
+  return center + (offset / 100) * (center - min);
 }
 
 function turnText(
@@ -169,12 +192,19 @@ function AimRange({
   min,
   max,
   unit,
+  sliderValue,
+  sliderMin,
+  sliderMax,
   disabled,
   onDecrease,
   onIncrease,
   onSet,
+  onSliderSet,
 }: AimRangeProps) {
-  const fill = normalizePercent(value, min, max);
+  const inputValue = sliderValue ?? value;
+  const inputMin = sliderMin ?? min;
+  const inputMax = sliderMax ?? max;
+  const fill = normalizePercent(inputValue, inputMin, inputMax);
 
   return (
     <div className="aim-range">
@@ -198,12 +228,12 @@ function AimRange({
         <input
           className="hud-range horizontal-range"
           type="range"
-          min={min}
-          max={max}
+          min={inputMin}
+          max={inputMax}
           step={1}
-          value={Math.round(value)}
+          value={Math.round(inputValue)}
           disabled={disabled}
-          onChange={(event) => onSet(Number(event.currentTarget.value))}
+          onChange={(event) => (onSliderSet ?? onSet)(Number(event.currentTarget.value))}
           style={{ "--fill": fill } as CSSProperties}
           aria-label={label}
         />
@@ -389,6 +419,13 @@ export function GameHUD({
   const enemyCount = computerTanks.length;
   const isChoosingReward = Boolean(rewardChoices);
   const movePercent = hpPercent((playerTank.movementRemaining / Math.max(1, movementBudget)) * 100);
+  const rotationOffset = signedAngleOffset(playerTank.turretYaw, playerTank.bodyYaw);
+  const elevationOffset = valueToCenteredOffset(
+    playerTank.elevation,
+    DEFAULT_ELEVATION,
+    MIN_ELEVATION,
+    MAX_ELEVATION,
+  );
 
   return (
     <div className="hud-layer">
@@ -470,10 +507,14 @@ export function GameHUD({
             min={0}
             max={360}
             unit=" deg"
+            sliderValue={rotationOffset}
+            sliderMin={-180}
+            sliderMax={180}
             disabled={disableControls}
             onDecrease={() => onTurretYawChange(-KEYBOARD_AIM_YAW_STEP)}
             onIncrease={() => onTurretYawChange(KEYBOARD_AIM_YAW_STEP)}
             onSet={onTurretYawSet}
+            onSliderSet={(offset) => onTurretYawSet(playerTank.bodyYaw + offset)}
           />
           <AimRange
             label="Elevation"
@@ -481,10 +522,18 @@ export function GameHUD({
             min={MIN_ELEVATION}
             max={MAX_ELEVATION}
             unit=" deg"
+            sliderValue={elevationOffset}
+            sliderMin={-100}
+            sliderMax={100}
             disabled={disableControls}
             onDecrease={() => onElevationChange(-KEYBOARD_AIM_ELEVATION_STEP)}
             onIncrease={() => onElevationChange(KEYBOARD_AIM_ELEVATION_STEP)}
             onSet={onElevationSet}
+            onSliderSet={(offset) =>
+              onElevationSet(
+                centeredOffsetToValue(offset, DEFAULT_ELEVATION, MIN_ELEVATION, MAX_ELEVATION),
+              )
+            }
           />
           <div className="movement-meter">
             <div className="control-label-row">
