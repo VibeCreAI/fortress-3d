@@ -21,6 +21,8 @@ const rocks = [
 ];
 
 function heightColor(height: number) {
+  if (height < -2.4) return "#5b6f4b";
+  if (height < -0.8) return "#648356";
   if (height > 3.3) return "#86d37c";
   if (height > 2.1) return "#78c86f";
   if (height > 0.7) return "#69ba64";

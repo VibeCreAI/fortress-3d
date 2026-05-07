@@ -3,6 +3,7 @@ import {
   CANNON_BASE_HEIGHT,
   CANNON_LENGTH,
   CRATER_DEPTH,
+  CRATER_MIN_HEIGHT,
   EXPLOSION_RADIUS,
   GRAVITY,
   GRAVITY_DAMAGE_FULL_APEX_RISE,
@@ -324,7 +325,7 @@ export function applyExplosionCrater(terrain: TerrainState, center: GroundPos, w
 
       const falloff = 1 - distance / radius;
       const lowered = height - depth * falloff;
-      return clamp(Math.round(lowered * 4) / 4, TERRAIN_MIN_HEIGHT, TERRAIN_MAX_HEIGHT);
+      return clamp(Math.round(lowered * 4) / 4, CRATER_MIN_HEIGHT, TERRAIN_MAX_HEIGHT);
     }),
   );
 
@@ -609,7 +610,7 @@ export function sanitizePower(power: number) {
 }
 
 export function terrainBottom() {
-  return TERRAIN_MIN_HEIGHT - TERRAIN_BASE_DEPTH;
+  return CRATER_MIN_HEIGHT - 0.75;
 }
 
 export function cellCenter(terrain: TerrainState, row: number, column: number): GroundPos {

@@ -8,6 +8,7 @@ export const TERRAIN_DEPTH = 25;
 export const TERRAIN_MIN_HEIGHT = -0.35;
 export const TERRAIN_MAX_HEIGHT = 4.4;
 export const TERRAIN_BASE_DEPTH = 3.1;
+export const CRATER_MIN_HEIGHT = TERRAIN_MIN_HEIGHT - 4.25;
 
 export const PLAYER_START_POSITION = { x: -13, y: -5 };
 export const COMPUTER_START_POSITION = { x: 13, y: 5 };
