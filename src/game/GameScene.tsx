@@ -9,6 +9,7 @@ import { Tank } from "./Tank";
 import { Terrain } from "./Terrain";
 import { TrajectoryPreview } from "./TrajectoryPreview";
 import { WindFlag } from "./WindFlag";
+import { WindParticles } from "./WindParticles";
 import { terrainHeightAt } from "./gameMath";
 import type {
   ExplosionState,
@@ -135,6 +136,7 @@ export function GameScene({
 
       <Terrain terrain={terrain} />
       <WindFlag terrain={terrain} wind={wind} />
+      <WindParticles terrain={terrain} wind={wind} />
       {supplyDrops.map((drop) => (
         <SupplyDropMarker key={drop.id} drop={drop} />
       ))}
