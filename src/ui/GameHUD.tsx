@@ -1,9 +1,7 @@
 import {
   ChevronDown,
-  ChevronUp,
   Compass,
   Flame,
-  Gauge,
   HeartPulse,
   Minus,
   MoveHorizontal,
@@ -11,8 +9,22 @@ import {
   RefreshCcw,
   Trophy,
   Wind as WindIcon,
-  ZoomIn,
 } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import {
+  KEYBOARD_AIM_ELEVATION_STEP,
+  KEYBOARD_AIM_YAW_STEP,
+  MAX_ELEVATION,
+  MAX_POWER,
+  MIN_ELEVATION,
+  MIN_POWER,
+} from "../game/constants";
 import type {
   ExplosionState,
   GamePhase,
@@ -35,17 +47,41 @@ type GameHUDProps = {
   winner: TurnOwner | null;
   lastExplosion: ExplosionState | null;
   canPlayerAct: boolean;
-  omniscientDistance: number;
   rewardChoices: RewardChoice[] | null;
   queuedWeapon: WeaponType;
   queuedWindIgnoreShots: number;
-  queuedMoveBonus: number;
+  activeMoveBonus: number;
+  movementBudget: number;
+  onTurretYawChange: (delta: number) => void;
+  onTurretYawSet: (value: number) => void;
   onElevationChange: (delta: number) => void;
+  onElevationSet: (value: number) => void;
   onPowerChange: (delta: number) => void;
+  onPowerSet: (value: number) => void;
+  onJoystickMove: (xDirection: number, yDirection: number) => void;
   onFire: () => void;
   onRewardChoice: (item: RewardItemType) => void;
   onReset: () => void;
 };
+
+type AimRangeProps = {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  disabled: boolean;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  onSet: (value: number) => void;
+};
+
+type PowerRangeProps = Pick<
+  AimRangeProps,
+  "value" | "min" | "max" | "disabled" | "onDecrease" | "onIncrease" | "onSet"
+>;
+
+type JoystickVector = { x: number; y: number };
 
 function hpPercent(hp: number) {
   return `${Math.max(0, Math.min(100, hp))}%`;
@@ -53,6 +89,10 @@ function hpPercent(hp: number) {
 
 function tankHpPercent(tank: TankState) {
   return hpPercent((tank.hp / Math.max(1, tank.maxHp)) * 100);
+}
+
+function normalizePercent(value: number, min: number, max: number) {
+  return `${Math.max(0, Math.min(100, ((value - min) / Math.max(1, max - min)) * 100))}%`;
 }
 
 function turnText(
@@ -100,7 +140,7 @@ function rewardMeta(item: RewardItemType) {
     return { label: "Repair", detail: "+30 HP now", className: "reward-heal" };
   }
   if (item === "moveBoost") {
-    return { label: "Move Boost", detail: "+5 next turn", className: "reward-move" };
+    return { label: "Move Boost", detail: "+5 movement now", className: "reward-move" };
   }
   if (item === "windShield") {
     return { label: "Wind Shield", detail: "Next shot ignores wind", className: "reward-wind" };
@@ -123,6 +163,201 @@ function rewardIcon(item: RewardItemType) {
   return <Compass size={18} />;
 }
 
+function AimRange({
+  label,
+  value,
+  min,
+  max,
+  unit,
+  disabled,
+  onDecrease,
+  onIncrease,
+  onSet,
+}: AimRangeProps) {
+  const fill = normalizePercent(value, min, max);
+
+  return (
+    <div className="aim-range">
+      <div className="control-label-row">
+        <span>{label}</span>
+        <strong>
+          {Math.round(value)}
+          {unit}
+        </strong>
+      </div>
+      <div className="range-row">
+        <button
+          type="button"
+          className="round-step-button"
+          disabled={disabled}
+          onClick={onDecrease}
+          title={`Lower ${label.toLowerCase()}`}
+        >
+          <Minus size={18} />
+        </button>
+        <input
+          className="hud-range horizontal-range"
+          type="range"
+          min={min}
+          max={max}
+          step={1}
+          value={Math.round(value)}
+          disabled={disabled}
+          onChange={(event) => onSet(Number(event.currentTarget.value))}
+          style={{ "--fill": fill } as CSSProperties}
+          aria-label={label}
+        />
+        <button
+          type="button"
+          className="round-step-button"
+          disabled={disabled}
+          onClick={onIncrease}
+          title={`Raise ${label.toLowerCase()}`}
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PowerRange({
+  value,
+  min,
+  max,
+  disabled,
+  onDecrease,
+  onIncrease,
+  onSet,
+}: PowerRangeProps) {
+  const fill = normalizePercent(value, min, max);
+
+  return (
+    <div className="power-control">
+      <div className="control-label-row power-title">
+        <span>Power</span>
+        <strong>{Math.round(Number.parseFloat(fill))}%</strong>
+      </div>
+      <div className="power-vertical-row">
+        <input
+          className="hud-range power-vertical-range"
+          type="range"
+          min={min}
+          max={max}
+          step={1}
+          value={Math.round(value)}
+          disabled={disabled}
+          onChange={(event) => onSet(Number(event.currentTarget.value))}
+          style={{ "--fill": fill } as CSSProperties}
+          aria-label="Power"
+        />
+        <div className="power-button-stack">
+          <button
+            type="button"
+            className="round-step-button"
+            disabled={disabled}
+            onClick={onIncrease}
+            title="Raise power"
+          >
+            <Plus size={18} />
+          </button>
+          <button
+            type="button"
+            className="round-step-button"
+            disabled={disabled}
+            onClick={onDecrease}
+            title="Lower power"
+          >
+            <Minus size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileJoystick({
+  disabled,
+  onMove,
+}: {
+  disabled: boolean;
+  onMove: (xDirection: number, yDirection: number) => void;
+}) {
+  const pointerIdRef = useRef<number | null>(null);
+  const vectorRef = useRef<JoystickVector>({ x: 0, y: 0 });
+  const [vector, setVector] = useState<JoystickVector>({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (disabled) {
+      vectorRef.current = { x: 0, y: 0 };
+      setVector({ x: 0, y: 0 });
+      return undefined;
+    }
+
+    let frame = 0;
+    let lastMoveAt = 0;
+    const tick = (time: number) => {
+      const current = vectorRef.current;
+      if (Math.hypot(current.x, current.y) > 0.12 && time - lastMoveAt > 42) {
+        onMove(current.x, current.y);
+        lastMoveAt = time;
+      }
+      frame = window.requestAnimationFrame(tick);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [disabled, onMove]);
+
+  const updateVector = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const radius = Math.min(rect.width, rect.height) / 2;
+    const rawX = (event.clientX - (rect.left + rect.width / 2)) / radius;
+    const rawY = ((rect.top + rect.height / 2) - event.clientY) / radius;
+    const magnitude = Math.hypot(rawX, rawY);
+    const next =
+      magnitude > 1
+        ? { x: rawX / magnitude, y: rawY / magnitude }
+        : { x: rawX, y: rawY };
+    vectorRef.current = next;
+    setVector(next);
+  };
+
+  const stop = (event?: ReactPointerEvent<HTMLDivElement>) => {
+    if (event && pointerIdRef.current !== event.pointerId) return;
+    pointerIdRef.current = null;
+    vectorRef.current = { x: 0, y: 0 };
+    setVector({ x: 0, y: 0 });
+  };
+
+  return (
+    <div className={`joystick-shell${disabled ? " joystick-disabled" : ""}`}>
+      <div
+        className="joystick-pad"
+        onPointerDown={(event) => {
+          if (disabled) return;
+          pointerIdRef.current = event.pointerId;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          updateVector(event);
+        }}
+        onPointerMove={(event) => {
+          if (disabled || pointerIdRef.current !== event.pointerId) return;
+          updateVector(event);
+        }}
+        onPointerUp={stop}
+        onPointerCancel={stop}
+      >
+        <div
+          className="joystick-thumb"
+          style={{
+            transform: `translate(calc(-50% + ${vector.x * 34}px), calc(-50% + ${-vector.y * 34}px))`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function GameHUD({
   stage,
   playerTank,
@@ -134,13 +369,18 @@ export function GameHUD({
   winner,
   lastExplosion,
   canPlayerAct,
-  omniscientDistance,
   rewardChoices,
   queuedWeapon,
   queuedWindIgnoreShots,
-  queuedMoveBonus,
+  activeMoveBonus,
+  movementBudget,
+  onTurretYawChange,
+  onTurretYawSet,
   onElevationChange,
+  onElevationSet,
   onPowerChange,
+  onPowerSet,
+  onJoystickMove,
   onFire,
   onRewardChoice,
   onReset,
@@ -148,158 +388,162 @@ export function GameHUD({
   const disableControls = !canPlayerAct;
   const enemyCount = computerTanks.length;
   const isChoosingReward = Boolean(rewardChoices);
-  const hasQueuedEffects =
-    queuedWeapon !== "base" || queuedWindIgnoreShots > 0 || queuedMoveBonus > 0;
+  const movePercent = hpPercent((playerTank.movementRemaining / Math.max(1, movementBudget)) * 100);
 
   return (
     <div className="hud-layer">
-      <section className="combat-panel hud-panel">
-        <div className="stage-chip">Stage {stage}</div>
-        <div className="turn-chip">
-          {isChoosingReward
-            ? "Choose supply reward"
-            : turnText(turnOwner, phase, winner, activeEnemyIndex, enemyCount)}
-        </div>
-        <div className="hp-row">
-          <div className="hp-label">
-            <HeartPulse size={16} />
-            Player
+      <section className="status-strip hud-panel">
+        <div className="status-left">
+          <div className="stage-chip">Stage {stage}</div>
+          <div className="turn-chip">
+            {isChoosingReward
+              ? "Choose supply reward"
+              : turnText(turnOwner, phase, winner, activeEnemyIndex, enemyCount)}
           </div>
-          <div className="hp-track">
-            <div className="hp-fill player-hp" style={{ width: tankHpPercent(playerTank) }} />
-          </div>
-          <span>{Math.round(playerTank.hp)}</span>
         </div>
-        {computerTanks.map((tank, i) => {
-          const labelSuffix = enemyCount > 1 ? ` ${i + 1}` : "";
-          const isActive = turnOwner === "computer" && i === activeEnemyIndex && tank.hp > 0;
-          return (
-            <div className={`hp-row${isActive ? " hp-row-active" : ""}`} key={i}>
-              <div className="hp-label">
-                <HeartPulse size={16} />
-                {`CPU${labelSuffix}`}
-              </div>
-              <div className="hp-track">
-                <div
-                  className="hp-fill cpu-hp"
-                  style={{
-                    width: tankHpPercent(tank),
-                    opacity: tank.hp > 0 ? 1 : 0.3,
-                  }}
-                />
-              </div>
-              <span>{Math.round(tank.hp)}</span>
+        <div className="status-health-grid">
+          <div className="status-health">
+            <div className="hp-label">
+              <HeartPulse size={15} />
+              Player
             </div>
-          );
-        })}
-        {lastExplosion && phase === "exploding" && (
-          <div className="impact-note">
-            {lastExplosion.damage > 0
-              ? `${lastExplosion.target === "player" ? "Player" : "CPU"} took ${lastExplosion.damage}`
-              : "No damage"}
+            <div className="hp-track">
+              <div className="hp-fill player-hp" style={{ width: tankHpPercent(playerTank) }} />
+            </div>
+            <strong>{Math.round(playerTank.hp)}</strong>
           </div>
-        )}
-      </section>
-
-      <section className="aim-panel hud-panel">
-        <div className="stat-grid three-d-stat-grid">
-          <div className="stat-cell">
-            <Compass size={17} />
-            <span>Yaw</span>
-            <strong>{Math.round(playerTank.turretYaw)} deg</strong>
-          </div>
-          <div className="stat-cell">
-            <Compass size={17} />
-            <span>Elev</span>
-            <strong>{Math.round(playerTank.elevation)} deg</strong>
-          </div>
-          <div className="stat-cell">
-            <Gauge size={17} />
-            <span>Power</span>
-            <strong>{Math.round(playerTank.power)}</strong>
-          </div>
-          <div className="stat-cell">
-            <WindIcon size={17} />
-            <span>Wind</span>
-            <strong>
-              {wind.label} {wind.strength}
-            </strong>
-          </div>
-          <div className="stat-cell">
-            <MoveHorizontal size={17} />
-            <span>Move</span>
-            <strong>{playerTank.movementRemaining.toFixed(1)}</strong>
-          </div>
-          <div className="stat-cell">
-            <ZoomIn size={17} />
-            <span>Height</span>
-            <strong>{omniscientDistance.toFixed(1)} m</strong>
-          </div>
-          <div className="stat-cell">
-            <MoveHorizontal size={17} />
-            <span>Pos</span>
-            <strong>
-              {playerTank.position.x.toFixed(1)}, {playerTank.position.y.toFixed(1)}
-            </strong>
-          </div>
-          <div className="stat-cell">
-            <ChevronUp size={17} />
-            <span>Alt</span>
-            <strong>{playerTank.height.toFixed(1)}</strong>
-          </div>
+          {computerTanks.map((tank, index) => {
+            const isActive =
+              turnOwner === "computer" && index === activeEnemyIndex && tank.hp > 0;
+            const label = enemyCount > 1 ? `CPU ${index + 1}` : "CPU";
+            return (
+              <div
+                className={`status-health status-enemy${isActive ? " status-health-active" : ""}${
+                  tank.hp <= 0 ? " status-health-defeated" : ""
+                }`}
+                key={index}
+              >
+                <div className="hp-label">
+                  <HeartPulse size={15} />
+                  {label}
+                </div>
+                <div className="hp-track">
+                  <div
+                    className="hp-fill cpu-hp"
+                    style={{ width: tankHpPercent(tank) }}
+                  />
+                </div>
+                <strong>{Math.round(Math.max(0, tank.hp))}</strong>
+              </div>
+            );
+          })}
         </div>
-
-        {hasQueuedEffects && (
-          <div className="effect-row">
-            {queuedWeapon !== "base" && (
-              <span className={`effect-chip effect-${queuedWeapon}`}>
-                <Flame size={14} />
-                Next: {weaponLabel(queuedWeapon)}
-              </span>
-            )}
-            {queuedWindIgnoreShots > 0 && (
-              <span className="effect-chip effect-wind">
-                <WindIcon size={14} />
-                Wind Shield
-              </span>
-            )}
-            {queuedMoveBonus > 0 && (
-              <span className="effect-chip effect-move">
-                <MoveHorizontal size={14} />
-                +{queuedMoveBonus} next move
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="control-row">
-          <button type="button" className="icon-button" disabled={disableControls} onClick={() => onElevationChange(2)} title="Raise elevation">
-            <ChevronUp size={18} />
-          </button>
-          <button type="button" className="icon-button" disabled={disableControls} onClick={() => onElevationChange(-2)} title="Lower elevation">
-            <ChevronDown size={18} />
-          </button>
-          <button type="button" className="icon-button" disabled={disableControls} onClick={() => onPowerChange(-3)} title="Lower power">
-            <Minus size={18} />
-          </button>
-          <button type="button" className="icon-button" disabled={disableControls} onClick={() => onPowerChange(3)} title="Raise power">
-            <Plus size={18} />
-          </button>
-          <button type="button" className="fire-button" disabled={disableControls} onClick={onFire}>
-            <Flame size={18} />
-            Fire
-          </button>
+        <div className="status-meta">
+          <span className="meta-chip">
+            <WindIcon size={14} />
+            {wind.label} {wind.strength}
+          </span>
+          {lastExplosion && phase === "exploding" && (
+            <span className="meta-chip impact-chip">
+              {lastExplosion.damage > 0
+                ? `${lastExplosion.target === "player" ? "Player" : "CPU"} -${lastExplosion.damage}`
+                : "No damage"}
+            </span>
+          )}
+          {queuedWeapon !== "base" && (
+            <span className={`meta-chip effect-${queuedWeapon}`}>
+              Next {weaponLabel(queuedWeapon)}
+            </span>
+          )}
+          {queuedWindIgnoreShots > 0 && <span className="meta-chip effect-wind">Wind Shield</span>}
+          {activeMoveBonus > 0 && (
+            <span className="meta-chip effect-move">+{activeMoveBonus} move active</span>
+          )}
         </div>
       </section>
 
-      <div className="bottom-hint">
-        <span>WASD Move</span>
-        <span>Arrow Keys Aim</span>
-        <span>Q/E Power</span>
-        <span>Space Fire</span>
-        <span>Mouse Rotate Camera</span>
-        <span>Right-Drag Move</span>
+      <section className="control-deck" aria-label="Tank controls">
+        <div className="control-card aim-card hud-panel">
+          <AimRange
+            label="Rotation"
+            value={playerTank.turretYaw}
+            min={0}
+            max={360}
+            unit=" deg"
+            disabled={disableControls}
+            onDecrease={() => onTurretYawChange(-KEYBOARD_AIM_YAW_STEP)}
+            onIncrease={() => onTurretYawChange(KEYBOARD_AIM_YAW_STEP)}
+            onSet={onTurretYawSet}
+          />
+          <AimRange
+            label="Elevation"
+            value={playerTank.elevation}
+            min={MIN_ELEVATION}
+            max={MAX_ELEVATION}
+            unit=" deg"
+            disabled={disableControls}
+            onDecrease={() => onElevationChange(-KEYBOARD_AIM_ELEVATION_STEP)}
+            onIncrease={() => onElevationChange(KEYBOARD_AIM_ELEVATION_STEP)}
+            onSet={onElevationSet}
+          />
+          <div className="movement-meter">
+            <div className="control-label-row">
+              <span>Movement</span>
+              <strong>{playerTank.movementRemaining.toFixed(1)} m</strong>
+            </div>
+            <div className="movement-track">
+              <div className="movement-fill" style={{ width: movePercent }} />
+            </div>
+          </div>
+          <div className="desktop-card-guide">
+            <span>
+              <kbd>Arrow Keys</kbd>
+              Aim
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="fire-orb"
+          disabled={disableControls}
+          onClick={onFire}
+          title="Fire"
+        >
+          <Flame size={22} />
+          FIRE!
+        </button>
+
+        <div className="control-card power-card hud-panel">
+          <PowerRange
+            value={playerTank.power}
+            min={MIN_POWER}
+            max={MAX_POWER}
+            disabled={disableControls}
+            onDecrease={() => onPowerChange(-3)}
+            onIncrease={() => onPowerChange(3)}
+            onSet={onPowerSet}
+          />
+          <div className="desktop-card-guide power-key-guide">
+            <span>
+              <kbd>E</kbd>
+              + Power
+            </span>
+            <span>
+              <kbd>Q</kbd>
+              - Power
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <MobileJoystick disabled={disableControls} onMove={onJoystickMove} />
+
+      <div className="control-hints">
+        <span>Drag Rotate</span>
+        <span>Right-Drag Pan</span>
         <span>Wheel Zoom</span>
+        <span>WASD Move</span>
       </div>
 
       {rewardChoices && (

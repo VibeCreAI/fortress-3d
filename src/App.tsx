@@ -15,7 +15,6 @@ import {
   PLAYER_MOVE_STEP,
   REWARD_HEAL_AMOUNT,
   REWARD_MOVE_BONUS,
-  REWARD_MOVE_BONUS_CAP,
   STAGE_CLEAR_DELAY_MS,
   STARTING_HP,
   SUPPLY_DROP_AVOID_RADIUS,
@@ -190,7 +189,7 @@ export default function App() {
   const [pendingRewardChoices, setPendingRewardChoices] = useState<RewardChoice[] | null>(null);
   const [queuedWeapon, setQueuedWeapon] = useState<WeaponType>("base");
   const [queuedWindIgnoreShots, setQueuedWindIgnoreShots] = useState(0);
-  const [queuedMoveBonus, setQueuedMoveBonus] = useState(0);
+  const [playerMovementBudget, setPlayerMovementBudget] = useState(MOVEMENT_PER_TURN);
   const projectileIdRef = useRef(1);
   const explosionIdRef = useRef(1);
   const supplyDropIdRef = useRef(1);
@@ -201,6 +200,13 @@ export default function App() {
 
   const omnRef = useRef({ yaw: 10, pitch: 60, panX: 0, panZ: 0, distance: OMNISCIENT_DEFAULT_DISTANCE });
   const cameraDragModeRef = useRef<"rotate" | "pan" | null>(null);
+  const activeTouchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const touchGestureRef = useRef<{
+    mode: "rotate" | "panZoom" | null;
+    x: number;
+    y: number;
+    distance: number;
+  }>({ mode: null, x: 0, y: 0, distance: 0 });
   omnRef.current.distance = omniscientDistance;
 
   const otherTanksFor = useCallback(
@@ -226,13 +232,13 @@ export default function App() {
       setActiveEnemyIndex(enemyIndex);
 
       if (owner === "player") {
-        const movementThisTurn = MOVEMENT_PER_TURN + queuedMoveBonus;
+        setPlayerMovementBudget(MOVEMENT_PER_TURN);
         setPlayerTank((tank) =>
-          snapTankToTerrain({ ...tank, movementRemaining: movementThisTurn }, terrain),
+          snapTankToTerrain({ ...tank, movementRemaining: MOVEMENT_PER_TURN }, terrain),
         );
-        setQueuedMoveBonus(0);
         setPhase("aiming");
       } else {
+        setPlayerMovementBudget(MOVEMENT_PER_TURN);
         setComputerTanks((tanks) =>
           tanks.map((t, i) =>
             i === enemyIndex
@@ -243,7 +249,7 @@ export default function App() {
         setPhase("turnTransition");
       }
     },
-    [queuedMoveBonus, terrain],
+    [terrain],
   );
 
   const startStage = useCallback((nextStage: number, carriedPlayerHp?: number) => {
@@ -266,7 +272,7 @@ export default function App() {
     setPendingRewardChoices(null);
     setQueuedWeapon("base");
     setQueuedWindIgnoreShots(0);
-    setQueuedMoveBonus(0);
+    setPlayerMovementBudget(MOVEMENT_PER_TURN);
     omnRef.current.panX = 0;
     omnRef.current.panZ = 0;
   }, []);
@@ -355,12 +361,34 @@ export default function App() {
     [canPlayerAct],
   );
 
+  const setElevationValue = useCallback(
+    (value: number) => {
+      if (!canPlayerAct) return;
+      setPlayerTank((tank) => ({
+        ...tank,
+        elevation: clamp(value, MIN_ELEVATION, MAX_ELEVATION),
+      }));
+    },
+    [canPlayerAct],
+  );
+
   const adjustTurretYaw = useCallback(
     (delta: number) => {
       if (!canPlayerAct) return;
       setPlayerTank((tank) => ({
         ...tank,
         turretYaw: normalizeDegrees(tank.turretYaw + delta),
+      }));
+    },
+    [canPlayerAct],
+  );
+
+  const setTurretYawValue = useCallback(
+    (value: number) => {
+      if (!canPlayerAct) return;
+      setPlayerTank((tank) => ({
+        ...tank,
+        turretYaw: normalizeDegrees(value),
       }));
     },
     [canPlayerAct],
@@ -375,6 +403,28 @@ export default function App() {
       }));
     },
     [canPlayerAct],
+  );
+
+  const setPowerValue = useCallback(
+    (value: number) => {
+      if (!canPlayerAct) return;
+      setPlayerTank((tank) => ({
+        ...tank,
+        power: clamp(value, MIN_POWER, MAX_POWER),
+      }));
+    },
+    [canPlayerAct],
+  );
+
+  const movePlayerCameraRelative = useCallback(
+    (xDirection: number, yDirection: number) => {
+      const yaw = (omnRef.current.yaw * Math.PI) / 180;
+      movePlayer(
+        xDirection * Math.cos(yaw) - yDirection * Math.sin(yaw),
+        -xDirection * Math.sin(yaw) - yDirection * Math.cos(yaw),
+      );
+    },
+    [movePlayer],
   );
 
   const firePlayer = useCallback(() => {
@@ -547,9 +597,11 @@ export default function App() {
           hp: Math.min(tank.maxHp, tank.hp + REWARD_HEAL_AMOUNT),
         }));
       } else if (item === "moveBoost") {
-        setQueuedMoveBonus((bonus) =>
-          Math.min(REWARD_MOVE_BONUS_CAP, bonus + REWARD_MOVE_BONUS),
-        );
+        setPlayerMovementBudget((budget) => budget + REWARD_MOVE_BONUS);
+        setPlayerTank((tank) => ({
+          ...tank,
+          movementRemaining: tank.movementRemaining + REWARD_MOVE_BONUS,
+        }));
       } else if (item === "windShield") {
         setQueuedWindIgnoreShots((shots) => shots + 1);
       } else {
@@ -563,6 +615,15 @@ export default function App() {
     },
     [pendingRewardChoices],
   );
+
+  const panCameraByScreenDelta = useCallback((xDelta: number, yDelta: number) => {
+    const yawRad = (omnRef.current.yaw * Math.PI) / 180;
+    const speed = omnRef.current.distance * 0.006;
+    omnRef.current.panX +=
+      (Math.cos(yawRad) * xDelta + Math.sin(yawRad) * yDelta) * speed;
+    omnRef.current.panZ +=
+      (-Math.sin(yawRad) * xDelta + Math.cos(yawRad) * yDelta) * speed;
+  }, []);
 
   // Mouse: rotate / pan camera
   useEffect(() => {
@@ -590,12 +651,7 @@ export default function App() {
         omnRef.current.yaw = normalizeDegrees(omnRef.current.yaw + event.movementX * 0.35);
         omnRef.current.pitch = clamp(omnRef.current.pitch - event.movementY * 0.25, 8, 88);
       } else if (cameraDragModeRef.current === "pan") {
-        const yawRad = (omnRef.current.yaw * Math.PI) / 180;
-        const speed = omnRef.current.distance * 0.006;
-        omnRef.current.panX +=
-          (Math.cos(yawRad) * event.movementX + Math.sin(yawRad) * event.movementY) * speed;
-        omnRef.current.panZ +=
-          (-Math.sin(yawRad) * event.movementX + Math.cos(yawRad) * event.movementY) * speed;
+        panCameraByScreenDelta(event.movementX, event.movementY);
       }
     };
 
@@ -613,7 +669,126 @@ export default function App() {
       document.removeEventListener("mouseup", stopCameraDrag);
       window.removeEventListener("blur", stopCameraDrag);
     };
-  }, []);
+  }, [panCameraByScreenDelta]);
+
+  // Touch: one-finger rotate, two-finger pan and pinch zoom
+  useEffect(() => {
+    const activePointers = activeTouchPointersRef.current;
+    const touchGesture = touchGestureRef.current;
+
+    const twoPointerGesture = () => {
+      const points = Array.from(activePointers.values()).slice(0, 2);
+      if (points.length < 2) return null;
+      const midpoint = {
+        x: (points[0].x + points[1].x) / 2,
+        y: (points[0].y + points[1].y) / 2,
+      };
+      return {
+        ...midpoint,
+        distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
+      };
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" || !(event.target instanceof HTMLCanvasElement)) {
+        return;
+      }
+
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePointers.size === 1) {
+        touchGesture.mode = "rotate";
+        touchGesture.x = event.clientX;
+        touchGesture.y = event.clientY;
+        touchGesture.distance = 0;
+      } else {
+        const gesture = twoPointerGesture();
+        if (gesture) {
+          touchGesture.mode = "panZoom";
+          touchGesture.x = gesture.x;
+          touchGesture.y = gesture.y;
+          touchGesture.distance = gesture.distance;
+        }
+      }
+      event.preventDefault();
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" || !activePointers.has(event.pointerId)) {
+        return;
+      }
+
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePointers.size === 1 && touchGesture.mode === "rotate") {
+        const xDelta = event.clientX - touchGesture.x;
+        const yDelta = event.clientY - touchGesture.y;
+        omnRef.current.yaw = normalizeDegrees(omnRef.current.yaw + xDelta * 0.35);
+        omnRef.current.pitch = clamp(omnRef.current.pitch - yDelta * 0.25, 8, 88);
+        touchGesture.x = event.clientX;
+        touchGesture.y = event.clientY;
+      } else if (activePointers.size >= 2) {
+        const gesture = twoPointerGesture();
+        if (gesture) {
+          if (touchGesture.mode !== "panZoom") {
+            touchGesture.mode = "panZoom";
+            touchGesture.x = gesture.x;
+            touchGesture.y = gesture.y;
+            touchGesture.distance = gesture.distance;
+          } else {
+            panCameraByScreenDelta(gesture.x - touchGesture.x, gesture.y - touchGesture.y);
+            const pinchDelta = gesture.distance - touchGesture.distance;
+            setOmniscientDistance((value) => {
+              const next = clamp(
+                value - pinchDelta * 0.08,
+                OMNISCIENT_MIN_DISTANCE,
+                OMNISCIENT_MAX_DISTANCE,
+              );
+              omnRef.current.distance = next;
+              return next;
+            });
+            touchGesture.x = gesture.x;
+            touchGesture.y = gesture.y;
+            touchGesture.distance = gesture.distance;
+          }
+        }
+      }
+      event.preventDefault();
+    };
+
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      activePointers.delete(event.pointerId);
+
+      if (activePointers.size === 1) {
+        const remaining = Array.from(activePointers.values())[0];
+        touchGesture.mode = "rotate";
+        touchGesture.x = remaining.x;
+        touchGesture.y = remaining.y;
+        touchGesture.distance = 0;
+      } else if (activePointers.size === 0) {
+        touchGesture.mode = null;
+        touchGesture.distance = 0;
+      }
+    };
+
+    const handleWindowBlur = () => {
+      activePointers.clear();
+      touchGesture.mode = null;
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, { passive: false });
+    document.addEventListener("pointermove", handlePointerMove, { passive: false });
+    document.addEventListener("pointerup", handlePointerEnd);
+    document.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("blur", handleWindowBlur);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerEnd);
+      document.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [panCameraByScreenDelta]);
 
   // Mouse wheel: zoom
   useEffect(() => {
@@ -754,17 +929,13 @@ export default function App() {
       } else if (isAimKey && key === "arrowdown") {
         adjustElevation(-KEYBOARD_AIM_ELEVATION_STEP);
       } else if (key === "a") {
-        const yaw = (omnRef.current.yaw * Math.PI) / 180;
-        movePlayer(-Math.cos(yaw), Math.sin(yaw));
+        movePlayerCameraRelative(-1, 0);
       } else if (key === "d") {
-        const yaw = (omnRef.current.yaw * Math.PI) / 180;
-        movePlayer(Math.cos(yaw), -Math.sin(yaw));
+        movePlayerCameraRelative(1, 0);
       } else if (key === "w") {
-        const yaw = (omnRef.current.yaw * Math.PI) / 180;
-        movePlayer(-Math.sin(yaw), -Math.cos(yaw));
+        movePlayerCameraRelative(0, 1);
       } else if (key === "s") {
-        const yaw = (omnRef.current.yaw * Math.PI) / 180;
-        movePlayer(Math.sin(yaw), Math.cos(yaw));
+        movePlayerCameraRelative(0, -1);
       } else if (key === "q") {
         adjustPower(-3);
       } else if (key === "e") {
@@ -776,7 +947,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [adjustElevation, adjustPower, adjustTurretYaw, firePlayer, movePlayer]);
+  }, [adjustElevation, adjustPower, adjustTurretYaw, firePlayer, movePlayerCameraRelative]);
 
   const activeSceneState = useMemo(
     () => ({
@@ -814,6 +985,8 @@ export default function App() {
     ],
   );
 
+  const activeMoveBonus = Math.max(0, playerMovementBudget - MOVEMENT_PER_TURN);
+
   return (
     <main className="app-shell">
       <div className="scene-layer">
@@ -830,13 +1003,18 @@ export default function App() {
         winner={winner}
         lastExplosion={explosion}
         canPlayerAct={canPlayerAct}
-        omniscientDistance={omniscientDistance}
         rewardChoices={pendingRewardChoices}
         queuedWeapon={queuedWeapon}
         queuedWindIgnoreShots={queuedWindIgnoreShots}
-        queuedMoveBonus={queuedMoveBonus}
+        activeMoveBonus={activeMoveBonus}
+        movementBudget={playerMovementBudget}
+        onTurretYawChange={adjustTurretYaw}
+        onTurretYawSet={setTurretYawValue}
         onElevationChange={adjustElevation}
+        onElevationSet={setElevationValue}
         onPowerChange={adjustPower}
+        onPowerSet={setPowerValue}
+        onJoystickMove={movePlayerCameraRelative}
         onFire={firePlayer}
         onRewardChoice={chooseReward}
         onReset={resetGame}
