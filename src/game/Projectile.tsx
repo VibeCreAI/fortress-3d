@@ -1,6 +1,5 @@
-import { Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   PROJECTILE_MAX_FLIGHT_TIME,
@@ -17,43 +16,94 @@ import {
 } from "./gameMath";
 import type { ProjectileLaunch, TankState, TerrainState, Vec3, Wind } from "./gameTypes";
 
+const TRAIL_POINT_COUNT = 25;
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
 type ProjectileProps = {
   launch: ProjectileLaunch;
   wind: Wind;
   terrain: TerrainState;
   targetTanks: TankState[];
   onImpact: (position: Vec3) => void;
+  onFlightPosition?: (position: Vec3, velocity: Vec3) => void;
 };
 
-export function Projectile({ launch, wind, terrain, targetTanks, onImpact }: ProjectileProps) {
+export function Projectile({ launch, wind, terrain, targetTanks, onImpact, onFlightPosition }: ProjectileProps) {
   const positionRef = useRef<Vec3>({ ...launch.start });
   const velocityRef = useRef<Vec3>({ ...launch.velocity });
-  const trailRef = useRef<Vec3[]>([{ ...launch.start }]);
+  const projectileMeshRef = useRef<THREE.Mesh>(null);
+  const lightRef = useRef<THREE.PointLight>(null);
+  const trailPositions = useMemo(() => new Float32Array(TRAIL_POINT_COUNT * 3), []);
+  const style = useMemo(() => projectileStyle(launch.weapon), [launch.weapon]);
+  const trailLine = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+    geometry.setDrawRange(0, 1);
+    const material = new THREE.LineBasicMaterial({
+      color: style.trail,
+      transparent: true,
+      opacity: style.trailOpacity,
+      depthWrite: false,
+    });
+    const line = new THREE.Line(geometry, material);
+    line.frustumCulled = false;
+    return line;
+  }, [style.trail, style.trailOpacity, trailPositions]);
+  const trailCountRef = useRef(1);
   const impactedRef = useRef(false);
   const elapsedRef = useRef(0);
-  const [renderPosition, setRenderPosition] = useState<Vec3>({ ...launch.start });
-  const [renderVelocity, setRenderVelocity] = useState<Vec3>({ ...launch.velocity });
-  const [trail, setTrail] = useState<Vec3[]>([{ ...launch.start }]);
-  const style = projectileStyle(launch.weapon);
-  const directionQuaternion = useMemo(() => {
-    const direction = new THREE.Vector3(renderVelocity.x, renderVelocity.y, renderVelocity.z);
-    if (direction.lengthSq() <= 0.0001) {
-      return new THREE.Quaternion();
+  const directionRef = useRef(new THREE.Vector3());
+
+  const writeTrailPoint = (index: number, point: Vec3) => {
+    const offset = index * 3;
+    trailPositions[offset] = point.x;
+    trailPositions[offset + 1] = point.y;
+    trailPositions[offset + 2] = point.z;
+  };
+
+  const refreshTrail = () => {
+    const geometry = trailLine.geometry;
+    geometry.setDrawRange(0, trailCountRef.current);
+    const positionAttribute = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (positionAttribute) {
+      positionAttribute.needsUpdate = true;
     }
-    direction.normalize();
-    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-  }, [renderVelocity]);
+  };
+
+  const moveVisuals = (position: Vec3, velocity: Vec3) => {
+    const mesh = projectileMeshRef.current;
+    if (mesh) {
+      mesh.position.set(position.x, position.y, position.z);
+      if (launch.weapon === "earth") {
+        directionRef.current.set(velocity.x, velocity.y, velocity.z);
+        if (directionRef.current.lengthSq() > 0.0001) {
+          directionRef.current.normalize();
+          mesh.quaternion.setFromUnitVectors(Y_AXIS, directionRef.current);
+        }
+      }
+    }
+    lightRef.current?.position.set(position.x, position.y, position.z);
+  };
+
+  useEffect(() => {
+    return () => {
+      trailLine.geometry.dispose();
+      (trailLine.material as THREE.Material).dispose();
+    };
+  }, [trailLine]);
 
   useEffect(() => {
     positionRef.current = { ...launch.start };
     velocityRef.current = { ...launch.velocity };
-    trailRef.current = [{ ...launch.start }];
+    trailPositions.fill(0);
+    writeTrailPoint(0, launch.start);
+    trailCountRef.current = 1;
     impactedRef.current = false;
     elapsedRef.current = 0;
-    setRenderPosition({ ...launch.start });
-    setRenderVelocity({ ...launch.velocity });
-    setTrail([{ ...launch.start }]);
-  }, [launch.id, launch.start, launch.velocity]);
+    moveVisuals(launch.start, launch.velocity);
+    refreshTrail();
+    onFlightPosition?.(launch.start, launch.velocity);
+  }, [launch.id, launch.start, launch.velocity, onFlightPosition, trailPositions]);
 
   useFrame((_, delta) => {
     if (impactedRef.current) {
@@ -76,6 +126,8 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact }: Pro
 
     velocityRef.current = next.velocity;
     positionRef.current = next.position;
+    moveVisuals(next.position, next.velocity);
+    onFlightPosition?.(next.position, next.velocity);
 
     const groundPosition = groundFromWorld(next.position);
     const terrainHeight = terrainHeightAt(terrain, groundPosition);
@@ -100,26 +152,24 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact }: Pro
       return;
     }
 
-    trailRef.current = [...trailRef.current.slice(-24), { ...next.position }];
-    setRenderPosition({ ...next.position });
-    setRenderVelocity({ ...next.velocity });
-    setTrail(trailRef.current);
+    if (trailCountRef.current < TRAIL_POINT_COUNT) {
+      writeTrailPoint(trailCountRef.current, next.position);
+      trailCountRef.current += 1;
+    } else {
+      trailPositions.copyWithin(0, 3);
+      writeTrailPoint(TRAIL_POINT_COUNT - 1, next.position);
+    }
+    refreshTrail();
   });
 
   return (
     <group>
-      {trail.length > 1 && (
-        <Line
-          points={trail.map((point) => [point.x, point.y, point.z] as [number, number, number])}
-          color={style.trail}
-          lineWidth={style.trailWidth}
-        />
-      )}
+      <primitive object={trailLine} />
       {launch.weapon === "earth" ? (
         <mesh
+          ref={projectileMeshRef}
           castShadow
-          position={[renderPosition.x, renderPosition.y, renderPosition.z]}
-          quaternion={directionQuaternion}
+          position={[launch.start.x, launch.start.y, launch.start.z]}
         >
           <coneGeometry args={[0.22, 0.7, 12]} />
           <meshStandardMaterial
@@ -130,7 +180,7 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact }: Pro
           />
         </mesh>
       ) : (
-        <mesh castShadow position={[renderPosition.x, renderPosition.y, renderPosition.z]}>
+        <mesh ref={projectileMeshRef} castShadow position={[launch.start.x, launch.start.y, launch.start.z]}>
           <sphereGeometry args={[style.radius, 18, 18]} />
           <meshStandardMaterial
             color={style.color}
@@ -141,7 +191,8 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact }: Pro
         </mesh>
       )}
       <pointLight
-        position={[renderPosition.x, renderPosition.y, renderPosition.z]}
+        ref={lightRef}
+        position={[launch.start.x, launch.start.y, launch.start.z]}
         color={style.light}
         intensity={style.lightIntensity}
         distance={style.lightDistance}
@@ -161,6 +212,7 @@ function projectileStyle(weapon: ProjectileLaunch["weapon"]) {
       lightDistance: 5.4,
       radius: 0.17,
       trail: "#ff8b7f",
+      trailOpacity: 0.64,
       trailWidth: 3,
     };
   }
@@ -175,6 +227,7 @@ function projectileStyle(weapon: ProjectileLaunch["weapon"]) {
       lightDistance: 4.8,
       radius: 0.24,
       trail: "#c79962",
+      trailOpacity: 0.62,
       trailWidth: 4,
     };
   }
@@ -189,6 +242,7 @@ function projectileStyle(weapon: ProjectileLaunch["weapon"]) {
       lightDistance: 6,
       radius: 0.25,
       trail: "#9ef7ff",
+      trailOpacity: 0.68,
       trailWidth: 4,
     };
   }
@@ -202,6 +256,7 @@ function projectileStyle(weapon: ProjectileLaunch["weapon"]) {
     lightDistance: 4.5,
     radius: 0.24,
     trail: "#fff0b4",
+    trailOpacity: 0.6,
     trailWidth: 3,
   };
 }
