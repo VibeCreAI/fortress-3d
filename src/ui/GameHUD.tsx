@@ -487,6 +487,14 @@ export function GameHUD({
                 : "No damage"}
             </span>
           )}
+          {lastExplosion &&
+            phase === "exploding" &&
+            lastExplosion.damage > 0 &&
+            lastExplosion.gravityMultiplier > 1.08 && (
+              <span className="meta-chip impact-chip">
+                Gravity x{lastExplosion.gravityMultiplier.toFixed(1)}
+              </span>
+            )}
           {queuedWeapon !== "base" && (
             <span className={`meta-chip effect-${queuedWeapon}`}>
               Next {weaponLabel(queuedWeapon)}

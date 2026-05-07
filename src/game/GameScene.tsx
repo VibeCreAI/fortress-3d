@@ -15,6 +15,7 @@ import { terrainHeightAt } from "./gameMath";
 import type {
   ExplosionState,
   GamePhase,
+  ProjectileImpactProfile,
   ProjectileLaunch,
   SupplyDrop,
   TankState,
@@ -44,7 +45,7 @@ type GameSceneProps = {
   playerPreviewWeapon: WeaponType;
   playerPreviewIgnoresWind: boolean;
   omnRef: MutableRefObject<OmnCam>;
-  onProjectileImpact: (position: Vec3) => void;
+  onProjectileImpact: (position: Vec3, profile: ProjectileImpactProfile) => void;
 };
 
 function SkyBackground() {
@@ -92,9 +93,10 @@ function CameraRig({
   terrain,
   omnRef,
   projectile,
+  explosion,
   supplyDrops,
   projectileFocusRef,
-}: Pick<GameSceneProps, "terrain" | "omnRef" | "projectile" | "supplyDrops"> & {
+}: Pick<GameSceneProps, "terrain" | "omnRef" | "projectile" | "explosion" | "supplyDrops"> & {
   projectileFocusRef: MutableRefObject<ProjectileFocus>;
 }) {
   const { camera, size } = useThree();
@@ -108,6 +110,7 @@ function CameraRig({
   const targetLookRef = useRef(new THREE.Vector3());
   const dronePositionRef = useRef(new THREE.Vector3());
   const droneLookRef = useRef(new THREE.Vector3());
+  const explosionOffsetRef = useRef(new THREE.Vector3());
 
   useFrame(() => {
     const baseFov = size.width / size.height < 0.75 ? 58 : 50;
@@ -152,6 +155,38 @@ function CameraRig({
       lookAtRef.current.lerp(lookTarget, 0.32);
       camera.lookAt(lookAtRef.current);
       easeCameraFov(camera, baseFov + 8);
+      return;
+    }
+
+    if (explosion) {
+      const explosionPosition = projectilePositionRef.current.set(
+        explosion.position.x,
+        explosion.position.y,
+        explosion.position.z,
+      );
+      const offset = explosionOffsetRef.current.copy(camera.position).sub(explosionPosition);
+      const offsetLength = offset.length();
+
+      if (!Number.isFinite(offsetLength) || offsetLength < 0.1) {
+        offset.set(explosion.owner === "player" ? -12 : 12, 5.6, 9);
+      } else {
+        offset.multiplyScalar(1 / offsetLength);
+        offset.multiplyScalar(Math.min(24, Math.max(13, offsetLength)));
+        offset.y = Math.max(offset.y, 4.6);
+      }
+
+      const targetPosition = targetPositionRef.current.copy(explosionPosition).add(offset);
+      const lookTarget = targetLookRef.current.set(
+        explosion.position.x,
+        explosion.position.y + 1.1,
+        explosion.position.z,
+      );
+
+      returningFromCinematicRef.current = true;
+      camera.position.lerp(targetPosition, 0.08);
+      lookAtRef.current.lerp(lookTarget, 0.22);
+      camera.lookAt(lookAtRef.current);
+      easeCameraFov(camera, baseFov + 7);
       return;
     }
 
@@ -288,6 +323,7 @@ export function GameScene({
         terrain={terrain}
         omnRef={omnRef}
         projectile={projectile}
+        explosion={explosion}
         supplyDrops={supplyDrops}
         projectileFocusRef={projectileFocusRef}
       />

@@ -5,6 +5,11 @@ import {
   CRATER_DEPTH,
   EXPLOSION_RADIUS,
   GRAVITY,
+  GRAVITY_DAMAGE_FULL_APEX_RISE,
+  GRAVITY_DAMAGE_FULL_DOWNWARD_SPEED,
+  GRAVITY_DAMAGE_MAX_MULTIPLIER,
+  GRAVITY_DAMAGE_MIN_APEX_RISE,
+  GRAVITY_DAMAGE_MIN_DOWNWARD_SPEED,
   MAGNET_SHOT_ACCELERATION,
   MAGNET_SHOT_RANGE,
   MAX_ELEVATION,
@@ -24,7 +29,16 @@ import {
   WIND_ACCELERATION_SCALE,
   getStageConfig,
 } from "./constants";
-import type { GroundPos, TankState, TerrainState, TurnOwner, Vec3, WeaponType, Wind } from "./gameTypes";
+import type {
+  GroundPos,
+  ProjectileImpactProfile,
+  TankState,
+  TerrainState,
+  TurnOwner,
+  Vec3,
+  WeaponType,
+  Wind,
+} from "./gameTypes";
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -489,10 +503,35 @@ export function advanceProjectile(
   return { position: nextPosition, velocity: nextVelocity };
 }
 
+export function gravityDamageMultiplier(profile?: ProjectileImpactProfile) {
+  if (!profile) return 1;
+
+  const apexRise = Math.max(0, profile.peakHeight - profile.launchHeight);
+  const downwardSpeed = Math.max(0, -profile.impactVelocity.y);
+  const heightScore = clamp(
+    (apexRise - GRAVITY_DAMAGE_MIN_APEX_RISE) /
+      (GRAVITY_DAMAGE_FULL_APEX_RISE - GRAVITY_DAMAGE_MIN_APEX_RISE),
+    0,
+    1,
+  );
+  const fallSpeedScore = clamp(
+    (downwardSpeed - GRAVITY_DAMAGE_MIN_DOWNWARD_SPEED) /
+      (GRAVITY_DAMAGE_FULL_DOWNWARD_SPEED - GRAVITY_DAMAGE_MIN_DOWNWARD_SPEED),
+    0,
+    1,
+  );
+  const airtimeScore = clamp((profile.flightTime - 1.2) / 4, 0, 1);
+  const fallingGate = clamp(downwardSpeed / GRAVITY_DAMAGE_MIN_DOWNWARD_SPEED, 0, 1);
+  const bonusScore = clamp((heightScore * 0.58 + fallSpeedScore * 0.34 + airtimeScore * 0.08) * fallingGate, 0, 1);
+
+  return 1 + (GRAVITY_DAMAGE_MAX_MULTIPLIER - 1) * bonusScore;
+}
+
 export function calculateExplosionDamage(
   impact: Vec3,
   targetTank: TankState,
   weapon: WeaponType = "base",
+  gravityMultiplier = 1,
 ) {
   const impactDistance = vec3Distance(impact, getTankCenter(targetTank));
 
@@ -503,6 +542,7 @@ export function calculateExplosionDamage(
   return Math.round(
     MAX_EXPLOSION_DAMAGE *
       weaponDamageMultiplier(weapon) *
+      gravityMultiplier *
       (1 - impactDistance / EXPLOSION_RADIUS),
   );
 }

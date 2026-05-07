@@ -14,7 +14,7 @@ import {
   terrainMaxY,
   vec3Distance,
 } from "./gameMath";
-import type { ProjectileLaunch, TankState, TerrainState, Vec3, Wind } from "./gameTypes";
+import type { ProjectileImpactProfile, ProjectileLaunch, TankState, TerrainState, Vec3, Wind } from "./gameTypes";
 
 const TRAIL_POINT_COUNT = 25;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -24,7 +24,7 @@ type ProjectileProps = {
   wind: Wind;
   terrain: TerrainState;
   targetTanks: TankState[];
-  onImpact: (position: Vec3) => void;
+  onImpact: (position: Vec3, profile: ProjectileImpactProfile) => void;
   onFlightPosition?: (position: Vec3, velocity: Vec3) => void;
 };
 
@@ -52,6 +52,7 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact, onFli
   const trailCountRef = useRef(1);
   const impactedRef = useRef(false);
   const elapsedRef = useRef(0);
+  const peakHeightRef = useRef(launch.start.y);
   const directionRef = useRef(new THREE.Vector3());
 
   const writeTrailPoint = (index: number, point: Vec3) => {
@@ -100,6 +101,7 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact, onFli
     trailCountRef.current = 1;
     impactedRef.current = false;
     elapsedRef.current = 0;
+    peakHeightRef.current = launch.start.y;
     moveVisuals(launch.start, launch.velocity);
     refreshTrail();
     onFlightPosition?.(launch.start, launch.velocity);
@@ -126,6 +128,7 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact, onFli
 
     velocityRef.current = next.velocity;
     positionRef.current = next.position;
+    peakHeightRef.current = Math.max(peakHeightRef.current, next.position.y);
     moveVisuals(next.position, next.velocity);
     onFlightPosition?.(next.position, next.velocity);
 
@@ -144,11 +147,19 @@ export function Projectile({ launch, wind, terrain, targetTanks, onImpact, onFli
 
     if (hitTerrain || hitTank || leftArena || expired) {
       impactedRef.current = true;
-      onImpact({
-        x: next.position.x,
-        y: expired ? terrainHeight + 0.12 : Math.max(next.position.y, terrainHeight + 0.12),
-        z: next.position.z,
-      });
+      onImpact(
+        {
+          x: next.position.x,
+          y: expired ? terrainHeight + 0.12 : Math.max(next.position.y, terrainHeight + 0.12),
+          z: next.position.z,
+        },
+        {
+          launchHeight: launch.start.y,
+          peakHeight: peakHeightRef.current,
+          impactVelocity: { ...next.velocity },
+          flightTime: elapsedRef.current,
+        },
+      );
       return;
     }
 

@@ -495,7 +495,7 @@ button {
   top: 12px;
   left: 50%;
   display: grid;
-  grid-template-columns: auto minmax(260px, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: min(980px, calc(100vw - 28px));
@@ -508,20 +508,21 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .status-health-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(154px, 1fr));
   gap: 8px;
   min-width: 0;
 }
 
 .status-health {
   display: grid;
-  grid-template-columns: auto minmax(72px, 1fr) 34px;
+  grid-template-columns: max-content minmax(48px, 1fr) max-content;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   color: var(--muted);
   font-size: 0.82rem;
@@ -541,7 +542,14 @@ button {
 .status-health strong {
   color: var(--ink);
   font-size: 0.86rem;
+  min-width: 24px;
   text-align: right;
+  white-space: nowrap;
+}
+
+.status-health .hp-label {
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 .meta-chip {
@@ -1093,11 +1101,11 @@ button {
   }
 
   .status-health-grid {
-    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
   }
 
   .status-health {
-    grid-template-columns: auto minmax(42px, 1fr) auto;
+    grid-template-columns: max-content minmax(42px, 1fr) max-content;
     gap: 6px;
     font-size: 0.74rem;
   }

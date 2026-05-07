@@ -79,6 +79,13 @@ export type ProjectileLaunch = {
   ignoresWind: boolean;
 };
 
+export type ProjectileImpactProfile = {
+  launchHeight: number;
+  peakHeight: number;
+  impactVelocity: Vec3;
+  flightTime: number;
+};
+
 export type ExplosionState = {
   id: number;
   owner: TurnOwner;
@@ -86,6 +93,7 @@ export type ExplosionState = {
   damage: number;
   target: TurnOwner;
   weapon: WeaponType;
+  gravityMultiplier: number;
 };
 
 export type ComputerPlan = {

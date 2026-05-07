@@ -36,6 +36,7 @@ import {
   createStageBlueprint,
   createWind,
   getCannonTip,
+  gravityDamageMultiplier,
   groundDistance,
   groundFromWorld,
   normalizeDegrees,
@@ -49,6 +50,7 @@ import type {
   ExplosionState,
   GamePhase,
   GroundPos,
+  ProjectileImpactProfile,
   ProjectileLaunch,
   RewardChoice,
   RewardItemType,
@@ -434,11 +436,12 @@ export default function App() {
   }, [canPlayerAct, fireTank]);
 
   const resolveProjectileImpact = useCallback(
-    (impact: Vec3) => {
+    (impact: Vec3, impactProfile: ProjectileImpactProfile) => {
       if (!projectile) return;
 
       const owner = projectile.owner;
       const weapon = projectile.weapon;
+      const gravityMultiplier = gravityDamageMultiplier(impactProfile);
       const craterCenter = groundFromWorld(impact);
       const nextTerrain = applyExplosionCrater(terrain, craterCenter, weapon);
       setTerrain(nextTerrain);
@@ -450,14 +453,14 @@ export default function App() {
       if (owner === "player") {
         const updated = computerTanks.map((t) => {
           if (t.hp <= 0) return t;
-          const dmg = calculateExplosionDamage(impact, t, weapon);
+          const dmg = calculateExplosionDamage(impact, t, weapon, gravityMultiplier);
           if (dmg > 0) totalEnemyDamage += dmg;
           return snapTankToTerrain({ ...t, hp: Math.max(0, t.hp - dmg) }, nextTerrain);
         });
         setComputerTanks(updated.map((t) => snapTankToTerrain(t, nextTerrain)));
         setPlayerTank((tank) => snapTankToTerrain(tank, nextTerrain));
       } else {
-        const dmg = calculateExplosionDamage(impact, playerTank, weapon);
+        const dmg = calculateExplosionDamage(impact, playerTank, weapon, gravityMultiplier);
         playerDamageTaken = dmg;
         setPlayerTank((tank) =>
           snapTankToTerrain({ ...tank, hp: Math.max(0, tank.hp - dmg) }, nextTerrain),
@@ -476,6 +479,7 @@ export default function App() {
         damage: damageShown,
         target,
         weapon,
+        gravityMultiplier,
       });
       explosionIdRef.current += 1;
 
@@ -487,7 +491,7 @@ export default function App() {
         aliveAfter = computerTanks
           .map((t, i) => ({ tank: t, index: i }))
           .filter(({ tank }) => {
-            const dmg = calculateExplosionDamage(impact, tank, weapon);
+            const dmg = calculateExplosionDamage(impact, tank, weapon, gravityMultiplier);
             return tank.hp - dmg > 0;
           });
       } else {
