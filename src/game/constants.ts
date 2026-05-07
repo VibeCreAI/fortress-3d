@@ -41,6 +41,18 @@ export const MAX_EXPLOSION_DAMAGE = 36;
 export const EXPLOSION_DURATION_MS = 1150;
 export const CRATER_DEPTH = 1.35;
 
+export const SUPPLY_DROP_CHANCE = 0.35;
+export const SUPPLY_DROP_PICKUP_RADIUS = 1.7;
+export const SUPPLY_DROP_MIN_DISTANCE = 4;
+export const SUPPLY_DROP_MAX_DISTANCE = 7;
+export const SUPPLY_DROP_AVOID_RADIUS = 2.5;
+export const SUPPLY_DROP_DELIVERY_MS = 2400;
+export const REWARD_HEAL_AMOUNT = 30;
+export const REWARD_MOVE_BONUS = 5;
+export const REWARD_MOVE_BONUS_CAP = 10;
+export const MAGNET_SHOT_RANGE = 18;
+export const MAGNET_SHOT_ACCELERATION = 11;
+
 export const TRAJECTORY_PREVIEW_TIME = 0.58;
 export const TRAJECTORY_PREVIEW_STEPS = 18;
 

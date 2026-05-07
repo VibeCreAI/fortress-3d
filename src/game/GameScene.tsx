@@ -4,6 +4,7 @@ import { Suspense, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { Explosion } from "./Explosion";
 import { Projectile } from "./Projectile";
+import { SupplyDropMarker } from "./SupplyDropMarker";
 import { Tank } from "./Tank";
 import { Terrain } from "./Terrain";
 import { TrajectoryPreview } from "./TrajectoryPreview";
@@ -13,10 +14,12 @@ import type {
   ExplosionState,
   GamePhase,
   ProjectileLaunch,
+  SupplyDrop,
   TankState,
   TerrainState,
   TurnOwner,
   Vec3,
+  WeaponType,
   Wind,
 } from "./gameTypes";
 
@@ -34,6 +37,9 @@ type GameSceneProps = {
   omniscientDistance: number;
   projectile: ProjectileLaunch | null;
   explosion: ExplosionState | null;
+  supplyDrops: SupplyDrop[];
+  playerPreviewWeapon: WeaponType;
+  playerPreviewIgnoresWind: boolean;
   omnRef: MutableRefObject<OmnCam>;
   onProjectileImpact: (position: Vec3) => void;
 };
@@ -89,6 +95,9 @@ export function GameScene({
   omnRef,
   projectile,
   explosion,
+  supplyDrops,
+  playerPreviewWeapon,
+  playerPreviewIgnoresWind,
   onProjectileImpact,
 }: GameSceneProps) {
   const showPlayerPreview = turnOwner === "player" && phase === "aiming" && !projectile;
@@ -126,6 +135,9 @@ export function GameScene({
 
       <Terrain terrain={terrain} />
       <WindFlag terrain={terrain} wind={wind} />
+      {supplyDrops.map((drop) => (
+        <SupplyDropMarker key={drop.id} drop={drop} />
+      ))}
       <Tank tank={playerTank} owner="player" active={turnOwner === "player" && phase === "aiming"} />
       {computerTanks.map((tank, i) =>
         tank.hp > 0 ? (
@@ -138,7 +150,16 @@ export function GameScene({
         ) : null,
       )}
 
-      {showPlayerPreview && <TrajectoryPreview tank={playerTank} wind={wind} />}
+      {showPlayerPreview && (
+        <TrajectoryPreview
+          tank={playerTank}
+          wind={wind}
+          weapon={playerPreviewWeapon}
+          ignoresWind={playerPreviewIgnoresWind}
+          targetTanks={computerTanks}
+          color={previewColor(playerPreviewWeapon, playerPreviewIgnoresWind)}
+        />
+      )}
       {showComputerPreview && activeComputerTank && (
         <TrajectoryPreview tank={activeComputerTank} wind={wind} color="#ffc36e" />
       )}
@@ -156,4 +177,12 @@ export function GameScene({
       {explosion && <Explosion key={explosion.id} explosion={explosion} />}
     </Canvas>
   );
+}
+
+function previewColor(weapon: WeaponType, ignoresWind: boolean) {
+  if (ignoresWind) return "#c6f7ff";
+  if (weapon === "red") return "#ff8b7f";
+  if (weapon === "earth") return "#c79962";
+  if (weapon === "magnet") return "#9ef7ff";
+  return "#fff3a3";
 }

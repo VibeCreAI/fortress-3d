@@ -242,6 +242,48 @@ button {
   margin-top: 12px;
 }
 
+.effect-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.effect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(24, 49, 63, 0.13);
+  border-radius: 8px;
+  color: #15303f;
+  background: #edf7f4;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.effect-red {
+  color: #5b1714;
+  background: #ffd9d4;
+}
+
+.effect-earth {
+  color: #4d311a;
+  background: #f0dec3;
+}
+
+.effect-magnet,
+.effect-wind {
+  color: #123a4b;
+  background: #d7f7ff;
+}
+
+.effect-move {
+  color: #173e32;
+  background: #d9f4ea;
+}
+
 .icon-button,
 .fire-button,
 .reset-button {
@@ -342,6 +384,94 @@ button {
   background: #d9f4ea;
 }
 
+.reward-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(560px, calc(100vw - 36px));
+  padding: 16px;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.reward-title {
+  color: #102836;
+  font-size: 1.32rem;
+  font-weight: 950;
+}
+
+.reward-copy {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.reward-button {
+  display: grid;
+  grid-template-rows: 24px auto 1fr;
+  justify-items: center;
+  gap: 6px;
+  min-height: 126px;
+  padding: 12px 9px;
+  border: 1px solid rgba(24, 49, 63, 0.14);
+  border-radius: 8px;
+  color: #132c39;
+  background: #f3f8f7;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease;
+}
+
+.reward-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.reward-button span {
+  font-size: 0.95rem;
+  font-weight: 950;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.reward-button strong {
+  color: #48606b;
+  font-size: 0.74rem;
+  font-weight: 850;
+  line-height: 1.18;
+  text-align: center;
+}
+
+.reward-heal {
+  background: #e5f7ef;
+}
+
+.reward-move {
+  background: #e8f2ff;
+}
+
+.reward-wind,
+.reward-magnet {
+  background: #e2f8fb;
+}
+
+.reward-red {
+  background: #ffe2dd;
+}
+
+.reward-earth {
+  background: #efe0cb;
+}
+
 @media (max-width: 760px) {
   .combat-panel,
   .aim-panel {
@@ -378,6 +508,20 @@ button {
 
   .control-row {
     margin-top: 9px;
+  }
+
+  .reward-panel {
+    top: 48%;
+    padding: 12px;
+  }
+
+  .reward-grid {
+    gap: 7px;
+  }
+
+  .reward-button {
+    min-height: 112px;
+    padding: 10px 6px;
   }
 
   .bottom-hint {
@@ -420,5 +564,30 @@ button {
 
   .aim-lock-row {
     margin-bottom: 8px;
+  }
+
+  .reward-panel {
+    top: 46%;
+  }
+
+  .reward-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reward-button {
+    grid-template-columns: 26px 1fr;
+    grid-template-rows: auto auto;
+    justify-items: start;
+    min-height: 58px;
+    text-align: left;
+  }
+
+  .reward-button span,
+  .reward-button strong {
+    text-align: left;
+  }
+
+  .reward-button strong {
+    grid-column: 2;
   }
 }

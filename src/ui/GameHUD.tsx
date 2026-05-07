@@ -13,7 +13,16 @@ import {
   Wind as WindIcon,
   ZoomIn,
 } from "lucide-react";
-import type { ExplosionState, GamePhase, TankState, TurnOwner, Wind } from "../game/gameTypes";
+import type {
+  ExplosionState,
+  GamePhase,
+  RewardChoice,
+  RewardItemType,
+  TankState,
+  TurnOwner,
+  WeaponType,
+  Wind,
+} from "../game/gameTypes";
 
 type GameHUDProps = {
   stage: number;
@@ -27,9 +36,14 @@ type GameHUDProps = {
   lastExplosion: ExplosionState | null;
   canPlayerAct: boolean;
   omniscientDistance: number;
+  rewardChoices: RewardChoice[] | null;
+  queuedWeapon: WeaponType;
+  queuedWindIgnoreShots: number;
+  queuedMoveBonus: number;
   onElevationChange: (delta: number) => void;
   onPowerChange: (delta: number) => void;
   onFire: () => void;
+  onRewardChoice: (item: RewardItemType) => void;
   onReset: () => void;
 };
 
@@ -74,6 +88,41 @@ function turnText(
   return "Player aiming";
 }
 
+function weaponLabel(weapon: WeaponType) {
+  if (weapon === "red") return "Red Shot";
+  if (weapon === "earth") return "Earth Shot";
+  if (weapon === "magnet") return "Magnet Shot";
+  return "Base Shot";
+}
+
+function rewardMeta(item: RewardItemType) {
+  if (item === "heal") {
+    return { label: "Repair", detail: "+30 HP now", className: "reward-heal" };
+  }
+  if (item === "moveBoost") {
+    return { label: "Move Boost", detail: "+5 next turn", className: "reward-move" };
+  }
+  if (item === "windShield") {
+    return { label: "Wind Shield", detail: "Next shot ignores wind", className: "reward-wind" };
+  }
+  if (item === "redShot") {
+    return { label: "Red Shot", detail: "2.2x damage, wind sensitive", className: "reward-red" };
+  }
+  if (item === "earthShot") {
+    return { label: "Earth Shot", detail: "Bigger crater, +20% damage", className: "reward-earth" };
+  }
+  return { label: "Magnet Shot", detail: "Curves toward enemies", className: "reward-magnet" };
+}
+
+function rewardIcon(item: RewardItemType) {
+  if (item === "heal") return <HeartPulse size={18} />;
+  if (item === "moveBoost") return <MoveHorizontal size={18} />;
+  if (item === "windShield") return <WindIcon size={18} />;
+  if (item === "redShot") return <Flame size={18} />;
+  if (item === "earthShot") return <ChevronDown size={18} />;
+  return <Compass size={18} />;
+}
+
 export function GameHUD({
   stage,
   playerTank,
@@ -86,20 +135,30 @@ export function GameHUD({
   lastExplosion,
   canPlayerAct,
   omniscientDistance,
+  rewardChoices,
+  queuedWeapon,
+  queuedWindIgnoreShots,
+  queuedMoveBonus,
   onElevationChange,
   onPowerChange,
   onFire,
+  onRewardChoice,
   onReset,
 }: GameHUDProps) {
   const disableControls = !canPlayerAct;
   const enemyCount = computerTanks.length;
+  const isChoosingReward = Boolean(rewardChoices);
+  const hasQueuedEffects =
+    queuedWeapon !== "base" || queuedWindIgnoreShots > 0 || queuedMoveBonus > 0;
 
   return (
     <div className="hud-layer">
       <section className="combat-panel hud-panel">
         <div className="stage-chip">Stage {stage}</div>
         <div className="turn-chip">
-          {turnText(turnOwner, phase, winner, activeEnemyIndex, enemyCount)}
+          {isChoosingReward
+            ? "Choose supply reward"
+            : turnText(turnOwner, phase, winner, activeEnemyIndex, enemyCount)}
         </div>
         <div className="hp-row">
           <div className="hp-label">
@@ -190,6 +249,29 @@ export function GameHUD({
           </div>
         </div>
 
+        {hasQueuedEffects && (
+          <div className="effect-row">
+            {queuedWeapon !== "base" && (
+              <span className={`effect-chip effect-${queuedWeapon}`}>
+                <Flame size={14} />
+                Next: {weaponLabel(queuedWeapon)}
+              </span>
+            )}
+            {queuedWindIgnoreShots > 0 && (
+              <span className="effect-chip effect-wind">
+                <WindIcon size={14} />
+                Wind Shield
+              </span>
+            )}
+            {queuedMoveBonus > 0 && (
+              <span className="effect-chip effect-move">
+                <MoveHorizontal size={14} />
+                +{queuedMoveBonus} next move
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="control-row">
           <button type="button" className="icon-button" disabled={disableControls} onClick={() => onElevationChange(2)} title="Raise elevation">
             <ChevronUp size={18} />
@@ -211,14 +293,38 @@ export function GameHUD({
       </section>
 
       <div className="bottom-hint">
-        <span>WASD 이동</span>
-        <span>방향키 조준</span>
-        <span>Q/E 화력</span>
-        <span>Space 발사</span>
-        <span>마우스 카메라 회전</span>
-        <span>우클릭 드래그 이동</span>
-        <span>휠 줌</span>
+        <span>WASD Move</span>
+        <span>Arrow Keys Aim</span>
+        <span>Q/E Power</span>
+        <span>Space Fire</span>
+        <span>Mouse Rotate Camera</span>
+        <span>Right-Drag Move</span>
+        <span>Wheel Zoom</span>
       </div>
+
+      {rewardChoices && (
+        <section className="reward-panel hud-panel">
+          <div className="reward-title">Supply Drop</div>
+          <div className="reward-copy">Choose one upgrade.</div>
+          <div className="reward-grid">
+            {rewardChoices.map((choice) => {
+              const meta = rewardMeta(choice.item);
+              return (
+                <button
+                  key={choice.id}
+                  type="button"
+                  className={`reward-button ${meta.className}`}
+                  onClick={() => onRewardChoice(choice.item)}
+                >
+                  {rewardIcon(choice.item)}
+                  <span>{meta.label}</span>
+                  <strong>{meta.detail}</strong>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {phase === "stageClear" && (
         <section className="winner-panel hud-panel">

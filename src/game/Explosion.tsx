@@ -1,6 +1,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useState } from "react";
-import { EXPLOSION_DURATION_MS, EXPLOSION_RADIUS } from "./constants";
+import { EXPLOSION_DURATION_MS } from "./constants";
+import { explosionRadiusForWeapon } from "./gameMath";
 import type { ExplosionState } from "./gameTypes";
 
 type ExplosionProps = {
@@ -33,18 +34,20 @@ export function Explosion({ explosion }: ExplosionProps) {
     setAge((value) => Math.min(1, value + (delta * 1000) / EXPLOSION_DURATION_MS));
   });
 
-  const scale = 0.35 + age * EXPLOSION_RADIUS * 0.82;
+  const radius = explosionRadiusForWeapon(explosion.weapon);
+  const scale = 0.35 + age * radius * 0.82;
   const opacity = Math.max(0, 0.46 * (1 - age));
+  const colors = explosionColors(explosion.weapon);
 
   return (
     <group position={[explosion.position.x, explosion.position.y, explosion.position.z]}>
       <mesh scale={[scale, scale, scale]}>
         <sphereGeometry args={[1, 24, 24]} />
-        <meshBasicMaterial color="#ffd166" transparent opacity={opacity} depthWrite={false} />
+        <meshBasicMaterial color={colors.outer} transparent opacity={opacity} depthWrite={false} />
       </mesh>
       <mesh scale={[scale * 0.62, scale * 0.62, scale * 0.62]}>
         <sphereGeometry args={[1, 18, 18]} />
-        <meshBasicMaterial color="#ff6b3a" transparent opacity={opacity * 0.68} depthWrite={false} />
+        <meshBasicMaterial color={colors.inner} transparent opacity={opacity * 0.68} depthWrite={false} />
       </mesh>
       {debris.map((piece, index) => (
         <mesh
@@ -69,4 +72,11 @@ export function Explosion({ explosion }: ExplosionProps) {
       )}
     </group>
   );
+}
+
+function explosionColors(weapon: ExplosionState["weapon"]) {
+  if (weapon === "red") return { outer: "#ff554d", inner: "#b71412" };
+  if (weapon === "earth") return { outer: "#c79962", inner: "#6d421e" };
+  if (weapon === "magnet") return { outer: "#9ef7ff", inner: "#2bb7ff" };
+  return { outer: "#ffd166", inner: "#ff6b3a" };
 }

@@ -1,5 +1,15 @@
 export type TurnOwner = "player" | "computer";
 
+export type WeaponType = "base" | "red" | "earth" | "magnet";
+
+export type RewardItemType =
+  | "heal"
+  | "moveBoost"
+  | "windShield"
+  | "redShot"
+  | "earthShot"
+  | "magnetShot";
+
 export type GamePhase =
   | "aiming"
   | "projectileFlying"
@@ -47,11 +57,26 @@ export type TankState = {
   movementRemaining: number;
 };
 
+export type SupplyDrop = {
+  id: number;
+  position: GroundPos;
+  height: number;
+  createdAtMs: number;
+  readyAtMs: number;
+};
+
+export type RewardChoice = {
+  id: number;
+  item: RewardItemType;
+};
+
 export type ProjectileLaunch = {
   id: number;
   owner: TurnOwner;
   start: Vec3;
   velocity: Vec3;
+  weapon: WeaponType;
+  ignoresWind: boolean;
 };
 
 export type ExplosionState = {
@@ -60,6 +85,7 @@ export type ExplosionState = {
   position: Vec3;
   damage: number;
   target: TurnOwner;
+  weapon: WeaponType;
 };
 
 export type ComputerPlan = {

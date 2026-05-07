@@ -13,8 +13,17 @@ import {
   OMNISCIENT_MAX_DISTANCE,
   OMNISCIENT_MIN_DISTANCE,
   PLAYER_MOVE_STEP,
+  REWARD_HEAL_AMOUNT,
+  REWARD_MOVE_BONUS,
+  REWARD_MOVE_BONUS_CAP,
   STAGE_CLEAR_DELAY_MS,
   STARTING_HP,
+  SUPPLY_DROP_AVOID_RADIUS,
+  SUPPLY_DROP_CHANCE,
+  SUPPLY_DROP_DELIVERY_MS,
+  SUPPLY_DROP_MAX_DISTANCE,
+  SUPPLY_DROP_MIN_DISTANCE,
+  SUPPLY_DROP_PICKUP_RADIUS,
   getStageConfig,
 } from "./game/constants";
 import { GameScene } from "./game/GameScene";
@@ -30,6 +39,7 @@ import {
   groundDistance,
   groundFromWorld,
   normalizeDegrees,
+  randomBetween,
   snapTankToTerrain,
   terrainHeightAt,
   yawTo,
@@ -40,10 +50,14 @@ import type {
   GamePhase,
   GroundPos,
   ProjectileLaunch,
+  RewardChoice,
+  RewardItemType,
+  SupplyDrop,
   TankState,
   TerrainState,
   TurnOwner,
   Vec3,
+  WeaponType,
 } from "./game/gameTypes";
 import { GameHUD } from "./ui/GameHUD";
 
@@ -97,6 +111,64 @@ function buildStage(stage: number, prevPlayerHp?: number): StageState {
   };
 }
 
+const REWARD_POOL: RewardItemType[] = [
+  "heal",
+  "moveBoost",
+  "windShield",
+  "redShot",
+  "earthShot",
+  "magnetShot",
+];
+
+function createRewardChoices(firstId: number): RewardChoice[] {
+  return [...REWARD_POOL]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3)
+    .map((item, index) => ({ id: firstId + index, item }));
+}
+
+function weaponForReward(item: RewardItemType): WeaponType | null {
+  if (item === "redShot") return "red";
+  if (item === "earthShot") return "earth";
+  if (item === "magnetShot") return "magnet";
+  return null;
+}
+
+function createSupplyDropNearPlayer(
+  id: number,
+  terrain: TerrainState,
+  player: TankState,
+  computerTanks: TankState[],
+  existingDrops: SupplyDrop[],
+): SupplyDrop | null {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const angle = randomBetween(0, Math.PI * 2);
+    const distance = randomBetween(SUPPLY_DROP_MIN_DISTANCE, SUPPLY_DROP_MAX_DISTANCE);
+    const desired: GroundPos = {
+      x: player.position.x + Math.cos(angle) * distance,
+      y: player.position.y + Math.sin(angle) * distance,
+    };
+    const move = canMoveTankTo(player, terrain, desired, computerTanks);
+
+    if (!move.allowed) continue;
+    const clearsExistingDrops = existingDrops.every(
+      (drop) => groundDistance(move.position, drop.position) >= SUPPLY_DROP_AVOID_RADIUS,
+    );
+    if (!clearsExistingDrops) continue;
+
+    const createdAtMs = Date.now();
+    return {
+      id,
+      position: move.position,
+      height: move.height,
+      createdAtMs,
+      readyAtMs: createdAtMs + SUPPLY_DROP_DELIVERY_MS,
+    };
+  }
+
+  return null;
+}
+
 export default function App() {
   const initial = useMemo(() => buildStage(1), []);
   const [stage, setStage] = useState<number>(initial.stage);
@@ -114,10 +186,18 @@ export default function App() {
   const [activeEnemyIndex, setActiveEnemyIndex] = useState<number>(0);
   const [computerPlan, setComputerPlan] = useState<ComputerPlan | null>(null);
   const [omniscientDistance, setOmniscientDistance] = useState(OMNISCIENT_DEFAULT_DISTANCE);
+  const [supplyDrops, setSupplyDrops] = useState<SupplyDrop[]>([]);
+  const [pendingRewardChoices, setPendingRewardChoices] = useState<RewardChoice[] | null>(null);
+  const [queuedWeapon, setQueuedWeapon] = useState<WeaponType>("base");
+  const [queuedWindIgnoreShots, setQueuedWindIgnoreShots] = useState(0);
+  const [queuedMoveBonus, setQueuedMoveBonus] = useState(0);
   const projectileIdRef = useRef(1);
   const explosionIdRef = useRef(1);
+  const supplyDropIdRef = useRef(1);
+  const rewardChoiceIdRef = useRef(1);
 
-  const canPlayerAct = turnOwner === "player" && phase === "aiming" && !winner;
+  const canPlayerAct =
+    turnOwner === "player" && phase === "aiming" && !winner && !pendingRewardChoices;
 
   const omnRef = useRef({ yaw: 10, pitch: 60, panX: 0, panZ: 0, distance: OMNISCIENT_DEFAULT_DISTANCE });
   const cameraDragModeRef = useRef<"rotate" | "pan" | null>(null);
@@ -146,9 +226,11 @@ export default function App() {
       setActiveEnemyIndex(enemyIndex);
 
       if (owner === "player") {
+        const movementThisTurn = MOVEMENT_PER_TURN + queuedMoveBonus;
         setPlayerTank((tank) =>
-          snapTankToTerrain({ ...tank, movementRemaining: MOVEMENT_PER_TURN }, terrain),
+          snapTankToTerrain({ ...tank, movementRemaining: movementThisTurn }, terrain),
         );
+        setQueuedMoveBonus(0);
         setPhase("aiming");
       } else {
         setComputerTanks((tanks) =>
@@ -161,7 +243,7 @@ export default function App() {
         setPhase("turnTransition");
       }
     },
-    [terrain],
+    [queuedMoveBonus, terrain],
   );
 
   const startStage = useCallback((nextStage: number, carriedPlayerHp?: number) => {
@@ -180,6 +262,11 @@ export default function App() {
     setActiveEnemyIndex(0);
     setPendingEnemyIndex(0);
     setComputerPlan(null);
+    setSupplyDrops([]);
+    setPendingRewardChoices(null);
+    setQueuedWeapon("base");
+    setQueuedWindIgnoreShots(0);
+    setQueuedMoveBonus(0);
     omnRef.current.panX = 0;
     omnRef.current.panZ = 0;
   }, []);
@@ -192,6 +279,8 @@ export default function App() {
     omnRef.current.distance = OMNISCIENT_DEFAULT_DISTANCE;
     projectileIdRef.current = 1;
     explosionIdRef.current = 1;
+    supplyDropIdRef.current = 1;
+    rewardChoiceIdRef.current = 1;
   }, [startStage]);
 
   const fireTank = useCallback(
@@ -199,18 +288,28 @@ export default function App() {
       const shooter =
         overrideTank ??
         (owner === "player" ? playerTank : computerTanks[enemyIndex ?? activeEnemyIndex]);
+      const weapon: WeaponType = owner === "player" ? queuedWeapon : "base";
+      const ignoresWind = owner === "player" && queuedWindIgnoreShots > 0;
 
       setProjectile({
         id: projectileIdRef.current,
         owner,
         start: getCannonTip(shooter),
         velocity: createLaunchVelocity(shooter),
+        weapon,
+        ignoresWind,
       });
       projectileIdRef.current += 1;
+      if (owner === "player") {
+        setQueuedWeapon("base");
+        if (ignoresWind) {
+          setQueuedWindIgnoreShots((shots) => Math.max(0, shots - 1));
+        }
+      }
       setExplosion(null);
       setPhase("projectileFlying");
     },
-    [activeEnemyIndex, computerTanks, playerTank],
+    [activeEnemyIndex, computerTanks, playerTank, queuedWeapon, queuedWindIgnoreShots],
   );
 
   const movePlayer = useCallback(
@@ -288,8 +387,9 @@ export default function App() {
       if (!projectile) return;
 
       const owner = projectile.owner;
+      const weapon = projectile.weapon;
       const craterCenter = groundFromWorld(impact);
-      const nextTerrain = applyExplosionCrater(terrain, craterCenter);
+      const nextTerrain = applyExplosionCrater(terrain, craterCenter, weapon);
       setTerrain(nextTerrain);
 
       let playerDamageTaken = 0;
@@ -299,14 +399,14 @@ export default function App() {
       if (owner === "player") {
         const updated = computerTanks.map((t) => {
           if (t.hp <= 0) return t;
-          const dmg = calculateExplosionDamage(impact, t);
+          const dmg = calculateExplosionDamage(impact, t, weapon);
           if (dmg > 0) totalEnemyDamage += dmg;
           return snapTankToTerrain({ ...t, hp: Math.max(0, t.hp - dmg) }, nextTerrain);
         });
         setComputerTanks(updated.map((t) => snapTankToTerrain(t, nextTerrain)));
         setPlayerTank((tank) => snapTankToTerrain(tank, nextTerrain));
       } else {
-        const dmg = calculateExplosionDamage(impact, playerTank);
+        const dmg = calculateExplosionDamage(impact, playerTank, weapon);
         playerDamageTaken = dmg;
         setPlayerTank((tank) =>
           snapTankToTerrain({ ...tank, hp: Math.max(0, tank.hp - dmg) }, nextTerrain),
@@ -324,6 +424,7 @@ export default function App() {
         position: impact,
         damage: damageShown,
         target,
+        weapon,
       });
       explosionIdRef.current += 1;
 
@@ -335,7 +436,7 @@ export default function App() {
         aliveAfter = computerTanks
           .map((t, i) => ({ tank: t, index: i }))
           .filter(({ tank }) => {
-            const dmg = calculateExplosionDamage(impact, tank);
+            const dmg = calculateExplosionDamage(impact, tank, weapon);
             return tank.hp - dmg > 0;
           });
       } else {
@@ -346,6 +447,29 @@ export default function App() {
 
       const playerDead = postPlayerHp <= 0;
       const allEnemiesDead = aliveAfter.length === 0;
+
+      if (
+        damageShown > 0 &&
+        !playerDead &&
+        !allEnemiesDead &&
+        Math.random() < SUPPLY_DROP_CHANCE
+      ) {
+        const postPlayerTank = snapTankToTerrain(
+          { ...playerTank, hp: postPlayerHp },
+          nextTerrain,
+        );
+        const drop = createSupplyDropNearPlayer(
+          supplyDropIdRef.current,
+          nextTerrain,
+          postPlayerTank,
+          computerTanks,
+          supplyDrops,
+        );
+        if (drop) {
+          supplyDropIdRef.current += 1;
+          setSupplyDrops((drops) => [...drops, drop]);
+        }
+      }
 
       if (playerDead) {
         setWinner("computer");
@@ -371,7 +495,73 @@ export default function App() {
 
       setPhase("exploding");
     },
-    [activeEnemyIndex, computerTanks, playerTank, projectile, terrain],
+    [activeEnemyIndex, computerTanks, playerTank, projectile, supplyDrops, terrain],
+  );
+
+  useEffect(() => {
+    if (turnOwner !== "player" || phase !== "aiming" || winner || pendingRewardChoices) {
+      return;
+    }
+
+    const now = Date.now();
+    const nearbyDrops = supplyDrops.filter(
+      (drop) => groundDistance(playerTank.position, drop.position) <= SUPPLY_DROP_PICKUP_RADIUS,
+    );
+    const readyDrops = nearbyDrops
+      .filter(
+        (drop) => now >= drop.readyAtMs,
+      )
+      .sort(
+        (a, b) =>
+          groundDistance(playerTank.position, a.position) -
+          groundDistance(playerTank.position, b.position),
+      );
+
+    const collected = readyDrops[0];
+    if (!collected) {
+      const nextReadyAt = nearbyDrops
+        .filter((drop) => drop.readyAtMs > now)
+        .reduce((soonest, drop) => Math.min(soonest, drop.readyAtMs), Number.POSITIVE_INFINITY);
+      if (Number.isFinite(nextReadyAt)) {
+        const timer = window.setTimeout(() => {
+          setSupplyDrops((drops) => drops.slice());
+        }, Math.max(0, nextReadyAt - now + 30));
+        return () => window.clearTimeout(timer);
+      }
+      return;
+    }
+
+    const choices = createRewardChoices(rewardChoiceIdRef.current);
+    rewardChoiceIdRef.current += choices.length;
+    setSupplyDrops((drops) => drops.filter((drop) => drop.id !== collected.id));
+    setPendingRewardChoices(choices);
+  }, [pendingRewardChoices, phase, playerTank.position, supplyDrops, turnOwner, winner]);
+
+  const chooseReward = useCallback(
+    (item: RewardItemType) => {
+      if (!pendingRewardChoices?.some((choice) => choice.item === item)) return;
+
+      if (item === "heal") {
+        setPlayerTank((tank) => ({
+          ...tank,
+          hp: Math.min(tank.maxHp, tank.hp + REWARD_HEAL_AMOUNT),
+        }));
+      } else if (item === "moveBoost") {
+        setQueuedMoveBonus((bonus) =>
+          Math.min(REWARD_MOVE_BONUS_CAP, bonus + REWARD_MOVE_BONUS),
+        );
+      } else if (item === "windShield") {
+        setQueuedWindIgnoreShots((shots) => shots + 1);
+      } else {
+        const weapon = weaponForReward(item);
+        if (weapon) {
+          setQueuedWeapon(weapon);
+        }
+      }
+
+      setPendingRewardChoices(null);
+    },
+    [pendingRewardChoices],
   );
 
   // Mouse: rotate / pan camera
@@ -601,6 +791,9 @@ export default function App() {
       omniscientDistance,
       projectile,
       explosion,
+      supplyDrops,
+      playerPreviewWeapon: queuedWeapon,
+      playerPreviewIgnoresWind: queuedWindIgnoreShots > 0,
       omnRef,
     }),
     [
@@ -611,6 +804,9 @@ export default function App() {
       phase,
       playerTank,
       projectile,
+      queuedWeapon,
+      queuedWindIgnoreShots,
+      supplyDrops,
       stage,
       terrain,
       turnOwner,
@@ -635,9 +831,14 @@ export default function App() {
         lastExplosion={explosion}
         canPlayerAct={canPlayerAct}
         omniscientDistance={omniscientDistance}
+        rewardChoices={pendingRewardChoices}
+        queuedWeapon={queuedWeapon}
+        queuedWindIgnoreShots={queuedWindIgnoreShots}
+        queuedMoveBonus={queuedMoveBonus}
         onElevationChange={adjustElevation}
         onPowerChange={adjustPower}
         onFire={firePlayer}
+        onRewardChoice={chooseReward}
         onReset={resetGame}
       />
     </main>

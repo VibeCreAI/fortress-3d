@@ -5,6 +5,8 @@ import {
   CRATER_DEPTH,
   EXPLOSION_RADIUS,
   GRAVITY,
+  MAGNET_SHOT_ACCELERATION,
+  MAGNET_SHOT_RANGE,
   MAX_ELEVATION,
   MAX_EXPLOSION_DAMAGE,
   MAX_POWER,
@@ -22,7 +24,7 @@ import {
   WIND_ACCELERATION_SCALE,
   getStageConfig,
 } from "./constants";
-import type { GroundPos, TankState, TerrainState, TurnOwner, Vec3, Wind } from "./gameTypes";
+import type { GroundPos, TankState, TerrainState, TurnOwner, Vec3, WeaponType, Wind } from "./gameTypes";
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -269,19 +271,45 @@ export function terrainHeightAt(terrain: TerrainState, position: GroundPos) {
   return hx0 + (hx1 - hx0) * ty;
 }
 
-export function applyExplosionCrater(terrain: TerrainState, center: GroundPos) {
+export function weaponDamageMultiplier(weapon: WeaponType) {
+  if (weapon === "red") return 2.2;
+  if (weapon === "earth") return 1.2;
+  return 1;
+}
+
+export function weaponCraterRadiusMultiplier(weapon: WeaponType) {
+  return weapon === "earth" ? 1.3 : 1;
+}
+
+export function weaponCraterDepthMultiplier(weapon: WeaponType) {
+  return weapon === "earth" ? 1.6 : 1;
+}
+
+export function weaponWindMultiplier(weapon: WeaponType, ignoresWind: boolean) {
+  if (ignoresWind) return 0;
+  return weapon === "red" ? 1.6 : 1;
+}
+
+export function explosionRadiusForWeapon(weapon: WeaponType) {
+  return EXPLOSION_RADIUS * weaponCraterRadiusMultiplier(weapon);
+}
+
+export function applyExplosionCrater(terrain: TerrainState, center: GroundPos, weapon: WeaponType = "base") {
+  const radius = explosionRadiusForWeapon(weapon);
+  const depth = CRATER_DEPTH * weaponCraterDepthMultiplier(weapon);
+
   const heights = terrain.heights.map((row, rowIndex) =>
     row.map((height, columnIndex) => {
       const x = terrain.minX + columnIndex * terrain.cellSize;
       const y = terrain.minY + rowIndex * terrain.cellSize;
       const distance = groundDistance({ x, y }, center);
 
-      if (distance >= EXPLOSION_RADIUS) {
+      if (distance >= radius) {
         return height;
       }
 
-      const falloff = 1 - distance / EXPLOSION_RADIUS;
-      const lowered = height - CRATER_DEPTH * falloff;
+      const falloff = 1 - distance / radius;
+      const lowered = height - depth * falloff;
       return clamp(Math.round(lowered * 4) / 4, TERRAIN_MIN_HEIGHT, TERRAIN_MAX_HEIGHT);
     }),
   );
@@ -390,14 +418,93 @@ export function windAcceleration(wind: Wind): Vec3 {
   };
 }
 
-export function calculateExplosionDamage(impact: Vec3, targetTank: TankState) {
+export function projectileWindAcceleration(wind: Wind, weapon: WeaponType, ignoresWind: boolean): Vec3 {
+  return scaleVec3(windAcceleration(wind), weaponWindMultiplier(weapon, ignoresWind));
+}
+
+export function magnetShotAcceleration(position: Vec3, targetTanks: TankState[], weapon: WeaponType): Vec3 {
+  if (weapon !== "magnet") {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  let nearest: { center: Vec3; distance: number } | null = null;
+  for (const tank of targetTanks) {
+    if (tank.hp <= 0) continue;
+    const center = getTankCenter(tank);
+    const distance = Math.hypot(center.x - position.x, center.z - position.z);
+    if (distance <= MAGNET_SHOT_RANGE && (!nearest || distance < nearest.distance)) {
+      nearest = { center, distance };
+    }
+  }
+
+  if (!nearest || nearest.distance <= 0.001) {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  const strength = MAGNET_SHOT_ACCELERATION * (1 - nearest.distance / MAGNET_SHOT_RANGE);
+  return {
+    x: ((nearest.center.x - position.x) / nearest.distance) * strength,
+    y: 0,
+    z: ((nearest.center.z - position.z) / nearest.distance) * strength,
+  };
+}
+
+export function projectileAcceleration(
+  position: Vec3,
+  wind: Wind,
+  weapon: WeaponType,
+  ignoresWind: boolean,
+  targetTanks: TankState[] = [],
+): Vec3 {
+  const windAccel = projectileWindAcceleration(wind, weapon, ignoresWind);
+  const magnetAccel = magnetShotAcceleration(position, targetTanks, weapon);
+  return {
+    x: windAccel.x + magnetAccel.x,
+    y: -GRAVITY,
+    z: windAccel.z + magnetAccel.z,
+  };
+}
+
+export function advanceProjectile(
+  position: Vec3,
+  velocity: Vec3,
+  dt: number,
+  wind: Wind,
+  weapon: WeaponType,
+  ignoresWind: boolean,
+  targetTanks: TankState[] = [],
+) {
+  const acceleration = projectileAcceleration(position, wind, weapon, ignoresWind, targetTanks);
+  const nextVelocity = {
+    x: velocity.x + acceleration.x * dt,
+    y: velocity.y + acceleration.y * dt,
+    z: velocity.z + acceleration.z * dt,
+  };
+  const nextPosition = {
+    x: position.x + nextVelocity.x * dt,
+    y: position.y + nextVelocity.y * dt,
+    z: position.z + nextVelocity.z * dt,
+  };
+
+  return { position: nextPosition, velocity: nextVelocity };
+}
+
+export function calculateExplosionDamage(
+  impact: Vec3,
+  targetTank: TankState,
+  weapon: WeaponType = "base",
+) {
   const impactDistance = vec3Distance(impact, getTankCenter(targetTank));
 
   if (impactDistance >= EXPLOSION_RADIUS) {
     return 0;
   }
 
-  return Math.round(MAX_EXPLOSION_DAMAGE * (1 - impactDistance / EXPLOSION_RADIUS));
+  return Math.round(
+    MAX_EXPLOSION_DAMAGE *
+      weaponDamageMultiplier(weapon) *
+      (1 - impactDistance / EXPLOSION_RADIUS),
+  );
 }
 
 export function canMoveTankTo(
@@ -427,19 +534,23 @@ export function snapTankToTerrain(tank: TankState, terrain: TerrainState): TankS
   };
 }
 
-export function previewTrajectory(tank: TankState, wind: Wind) {
-  const start = getCannonTip(tank);
-  const velocity = createLaunchVelocity(tank);
-  const windAccel = windAcceleration(wind);
+export function previewTrajectory(
+  tank: TankState,
+  wind: Wind,
+  weapon: WeaponType = "base",
+  ignoresWind = false,
+  targetTanks: TankState[] = [],
+) {
+  let position = getCannonTip(tank);
+  let velocity = createLaunchVelocity(tank);
   const points: Vec3[] = [];
 
   for (let i = 0; i <= TRAJECTORY_PREVIEW_STEPS; i += 1) {
-    const t = (i / TRAJECTORY_PREVIEW_STEPS) * TRAJECTORY_PREVIEW_TIME;
-    points.push({
-      x: start.x + velocity.x * t + 0.5 * windAccel.x * t * t,
-      y: start.y + velocity.y * t - 0.5 * GRAVITY * t * t,
-      z: start.z + velocity.z * t + 0.5 * windAccel.z * t * t,
-    });
+    points.push(position);
+    const dt = TRAJECTORY_PREVIEW_TIME / TRAJECTORY_PREVIEW_STEPS;
+    const next = advanceProjectile(position, velocity, dt, wind, weapon, ignoresWind, targetTanks);
+    position = next.position;
+    velocity = next.velocity;
   }
 
   return points;
