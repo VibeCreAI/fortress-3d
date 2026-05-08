@@ -571,6 +571,66 @@ button {
   background: #ffe3ca;
 }
 
+.shot-result-toast {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(340px, calc(100vw - 36px));
+  padding: 13px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 8px;
+  color: #102836;
+  background: rgba(247, 252, 250, 0.9);
+  box-shadow: 0 16px 34px rgba(18, 40, 54, 0.22);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: shot-result-pop 1150ms ease both;
+}
+
+.shot-result-title {
+  font-size: clamp(1.15rem, 2.5vw, 1.62rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.shot-result-detail {
+  margin-top: 6px;
+  color: #46606d;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.shot-result-hit {
+  background: rgba(230, 248, 239, 0.92);
+}
+
+.shot-result-gravity {
+  color: #512414;
+  background: rgba(255, 226, 201, 0.94);
+  box-shadow: 0 16px 34px rgba(122, 50, 26, 0.24);
+}
+
+.shot-result-miss {
+  background: rgba(239, 244, 246, 0.9);
+}
+
+@keyframes shot-result-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -42%) scale(0.94);
+  }
+  14%,
+  78% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -56%) scale(0.98);
+  }
+}
+
 .control-deck {
   position: absolute;
   left: 50%;

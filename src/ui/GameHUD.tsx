@@ -186,6 +186,32 @@ function rewardIcon(item: RewardItemType) {
   return <Compass size={18} />;
 }
 
+function shotResultMeta(explosion: ExplosionState) {
+  const target = explosion.target === "player" ? "Player" : "CPU";
+
+  if (explosion.damage <= 0) {
+    return {
+      title: "No Damage",
+      detail: "Shot landed outside blast range",
+      className: "shot-result-miss",
+    };
+  }
+
+  if (explosion.gravityMultiplier > 1.08) {
+    return {
+      title: "Gravity Impact",
+      detail: `${target} -${explosion.damage} HP  |  x${explosion.gravityMultiplier.toFixed(1)} fall bonus`,
+      className: "shot-result-gravity",
+    };
+  }
+
+  return {
+    title: "Hit Confirmed",
+    detail: `${target} -${explosion.damage} HP`,
+    className: "shot-result-hit",
+  };
+}
+
 function AimRange({
   label,
   value,
@@ -419,13 +445,27 @@ export function GameHUD({
   const enemyCount = computerTanks.length;
   const isChoosingReward = Boolean(rewardChoices);
   const movePercent = hpPercent((playerTank.movementRemaining / Math.max(1, movementBudget)) * 100);
-  const rotationOffset = signedAngleOffset(playerTank.turretYaw, playerTank.bodyYaw);
+  const [rotationCenterYaw, setRotationCenterYaw] = useState(playerTank.turretYaw);
+  const wasPlayerAimingRef = useRef(false);
+  const lastStageRef = useRef(stage);
+  const isPlayerAimingPhase = turnOwner === "player" && phase === "aiming" && !winner;
+  const rotationOffset = signedAngleOffset(playerTank.turretYaw, rotationCenterYaw);
   const elevationOffset = valueToCenteredOffset(
     playerTank.elevation,
     DEFAULT_ELEVATION,
     MIN_ELEVATION,
     MAX_ELEVATION,
   );
+  const shotResult =
+    lastExplosion && phase === "exploding" ? shotResultMeta(lastExplosion) : null;
+
+  useEffect(() => {
+    if (isPlayerAimingPhase && (!wasPlayerAimingRef.current || lastStageRef.current !== stage)) {
+      setRotationCenterYaw(playerTank.turretYaw);
+    }
+    wasPlayerAimingRef.current = isPlayerAimingPhase;
+    lastStageRef.current = stage;
+  }, [isPlayerAimingPhase, playerTank.turretYaw, stage]);
 
   return (
     <div className="hud-layer">
@@ -480,21 +520,6 @@ export function GameHUD({
             <WindIcon size={14} />
             {wind.label} {wind.strength}
           </span>
-          {lastExplosion && phase === "exploding" && (
-            <span className="meta-chip impact-chip">
-              {lastExplosion.damage > 0
-                ? `${lastExplosion.target === "player" ? "Player" : "CPU"} -${lastExplosion.damage}`
-                : "No damage"}
-            </span>
-          )}
-          {lastExplosion &&
-            phase === "exploding" &&
-            lastExplosion.damage > 0 &&
-            lastExplosion.gravityMultiplier > 1.08 && (
-              <span className="meta-chip impact-chip">
-                Gravity x{lastExplosion.gravityMultiplier.toFixed(1)}
-              </span>
-            )}
           {queuedWeapon !== "base" && (
             <span className={`meta-chip effect-${queuedWeapon}`}>
               Next {weaponLabel(queuedWeapon)}
@@ -506,6 +531,13 @@ export function GameHUD({
           )}
         </div>
       </section>
+
+      {shotResult && (
+        <section className={`shot-result-toast ${shotResult.className}`} aria-live="polite">
+          <div className="shot-result-title">{shotResult.title}</div>
+          <div className="shot-result-detail">{shotResult.detail}</div>
+        </section>
+      )}
 
       <section className="control-deck" aria-label="Tank controls">
         <div className="control-card aim-card hud-panel">
@@ -522,7 +554,7 @@ export function GameHUD({
             onDecrease={() => onTurretYawChange(-KEYBOARD_AIM_YAW_STEP)}
             onIncrease={() => onTurretYawChange(KEYBOARD_AIM_YAW_STEP)}
             onSet={onTurretYawSet}
-            onSliderSet={(offset) => onTurretYawSet(playerTank.bodyYaw + offset)}
+            onSliderSet={(offset) => onTurretYawSet(rotationCenterYaw + offset)}
           />
           <AimRange
             label="Elevation"
