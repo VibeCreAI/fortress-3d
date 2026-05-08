@@ -437,7 +437,12 @@ export function projectileWindAcceleration(wind: Wind, weapon: WeaponType, ignor
   return scaleVec3(windAcceleration(wind), weaponWindMultiplier(weapon, ignoresWind));
 }
 
-export function magnetShotAcceleration(position: Vec3, targetTanks: TankState[], weapon: WeaponType): Vec3 {
+export function magnetShotAcceleration(
+  position: Vec3,
+  velocity: Vec3,
+  targetTanks: TankState[],
+  weapon: WeaponType,
+): Vec3 {
   if (weapon !== "magnet") {
     return { x: 0, y: 0, z: 0 };
   }
@@ -457,24 +462,50 @@ export function magnetShotAcceleration(position: Vec3, targetTanks: TankState[],
   }
 
   const rangeRatio = clamp(nearest.distance / MAGNET_SHOT_RANGE, 0, 1);
-  const pullRatio = 0.3 + 0.7 * (1 - rangeRatio) * (1 - rangeRatio);
+  const pullRatio = 0.38 + 0.62 * Math.pow(1 - rangeRatio, 1.35);
   const strength = MAGNET_SHOT_ACCELERATION * pullRatio;
+  const targetDirection = {
+    x: (nearest.center.x - position.x) / nearest.distance,
+    z: (nearest.center.z - position.z) / nearest.distance,
+  };
+  const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+
+  if (horizontalSpeed > 0.001) {
+    const desiredVelocity = {
+      x: targetDirection.x * horizontalSpeed,
+      z: targetDirection.z * horizontalSpeed,
+    };
+    const correction = {
+      x: desiredVelocity.x - velocity.x,
+      z: desiredVelocity.z - velocity.z,
+    };
+    const correctionMagnitude = Math.hypot(correction.x, correction.z);
+    if (correctionMagnitude > 0.001) {
+      return {
+        x: (correction.x / correctionMagnitude) * strength,
+        y: 0,
+        z: (correction.z / correctionMagnitude) * strength,
+      };
+    }
+  }
+
   return {
-    x: ((nearest.center.x - position.x) / nearest.distance) * strength,
+    x: targetDirection.x * strength,
     y: 0,
-    z: ((nearest.center.z - position.z) / nearest.distance) * strength,
+    z: targetDirection.z * strength,
   };
 }
 
 export function projectileAcceleration(
   position: Vec3,
+  velocity: Vec3,
   wind: Wind,
   weapon: WeaponType,
   ignoresWind: boolean,
   targetTanks: TankState[] = [],
 ): Vec3 {
   const windAccel = projectileWindAcceleration(wind, weapon, ignoresWind);
-  const magnetAccel = magnetShotAcceleration(position, targetTanks, weapon);
+  const magnetAccel = magnetShotAcceleration(position, velocity, targetTanks, weapon);
   return {
     x: windAccel.x + magnetAccel.x,
     y: -GRAVITY,
@@ -491,7 +522,14 @@ export function advanceProjectile(
   ignoresWind: boolean,
   targetTanks: TankState[] = [],
 ) {
-  const acceleration = projectileAcceleration(position, wind, weapon, ignoresWind, targetTanks);
+  const acceleration = projectileAcceleration(
+    position,
+    velocity,
+    wind,
+    weapon,
+    ignoresWind,
+    targetTanks,
+  );
   const nextVelocity = {
     x: velocity.x + acceleration.x * dt,
     y: velocity.y + acceleration.y * dt,

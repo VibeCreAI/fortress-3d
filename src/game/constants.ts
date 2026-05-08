@@ -56,8 +56,8 @@ export const SUPPLY_DROP_AVOID_RADIUS = 2.5;
 export const SUPPLY_DROP_DELIVERY_MS = 2400;
 export const REWARD_HEAL_AMOUNT = 30;
 export const REWARD_MOVE_BONUS = 5;
-export const MAGNET_SHOT_RANGE = 24;
-export const MAGNET_SHOT_ACCELERATION = 20;
+export const MAGNET_SHOT_RANGE = 34;
+export const MAGNET_SHOT_ACCELERATION = 36;
 
 export const TRAJECTORY_PREVIEW_TIME = 0.58;
 export const TRAJECTORY_PREVIEW_STEPS = 18;
