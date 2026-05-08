@@ -6,6 +6,7 @@ import type { TerrainState, Wind } from "./gameTypes";
 
 const PARTICLE_COUNT = 120;
 const MAX_STRENGTH = 8;
+const UPDATE_INTERVAL_SECONDS = 1 / 36;
 const dummy = new THREE.Object3D();
 
 type WindParticlesProps = {
@@ -30,6 +31,7 @@ function pseudo(index: number, salt: number) {
 export function WindParticles({ terrain, wind }: WindParticlesProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const materialRef = useRef<THREE.MeshBasicMaterial>(null);
+  const lastUpdateRef = useRef(-UPDATE_INTERVAL_SECONDS);
 
   const seeds = useMemo<ParticleSeed[]>(
     () =>
@@ -47,6 +49,12 @@ export function WindParticles({ terrain, wind }: WindParticlesProps) {
   useFrame((state) => {
     const mesh = meshRef.current;
     if (!mesh) return;
+
+    const elapsed = state.clock.elapsedTime;
+    if (elapsed - lastUpdateRef.current < UPDATE_INTERVAL_SECONDS) {
+      return;
+    }
+    lastUpdateRef.current = elapsed;
 
     const strengthRatio = Math.min(1, Math.max(0, wind.strength / MAX_STRENGTH));
     const activeCount = wind.strength <= 0 ? 0 : Math.round(26 + strengthRatio * (PARTICLE_COUNT - 26));
@@ -68,7 +76,6 @@ export function WindParticles({ terrain, wind }: WindParticlesProps) {
     const perpX = -dirZ;
     const perpZ = dirX;
     const yaw = -Math.atan2(dirZ, dirX);
-    const elapsed = state.clock.elapsedTime;
     const flowSpeed = 2.0 + wind.strength * 1.35;
     const streakLength = 0.5 + strengthRatio * 1.25;
 

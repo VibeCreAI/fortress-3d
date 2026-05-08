@@ -1,9 +1,18 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
 import { cellCenter, terrainBottom, terrainHeightAt } from "./gameMath";
 import type { TerrainState } from "./gameTypes";
 
 type TerrainProps = {
   terrain: TerrainState;
+};
+
+type TerrainCell = {
+  x: number;
+  y: number;
+  height: number;
+  columnHeight: number;
+  color: string;
 };
 
 const shrubs = [
@@ -29,37 +38,107 @@ function heightColor(height: number) {
   return "#5aa95b";
 }
 
+function TerrainTopInstances({
+  cells,
+  cellSize,
+  color,
+}: {
+  cells: TerrainCell[];
+  cellSize: number;
+  color: string;
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+
+    const dummy = new THREE.Object3D();
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    cells.forEach((cell, index) => {
+      dummy.position.set(cell.x, cell.height + 0.035, cell.y);
+      dummy.scale.set(1, 1, 1);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(index, dummy.matrix);
+    });
+    mesh.count = cells.length;
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [cells]);
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, cells.length]} castShadow receiveShadow>
+      <boxGeometry args={[cellSize * 0.96, 0.07, cellSize * 0.96]} />
+      <meshStandardMaterial color={color} roughness={0.86} />
+    </instancedMesh>
+  );
+}
+
 export function Terrain({ terrain }: TerrainProps) {
   const bottom = terrainBottom();
+  const columnMeshRef = useRef<THREE.InstancedMesh>(null);
   const cells = useMemo(
     () =>
       terrain.heights.flatMap((row, rowIndex) =>
-        row.map((height, columnIndex) => ({
-          ...cellCenter(terrain, rowIndex, columnIndex),
-          height,
-          key: `${rowIndex}-${columnIndex}`,
-        })),
+        row.map((height, columnIndex) => {
+          const center = cellCenter(terrain, rowIndex, columnIndex);
+          return {
+            ...center,
+            height,
+            columnHeight: Math.max(0.1, height - bottom),
+            color: heightColor(height),
+          };
+        }),
       ),
-    [terrain],
+    [bottom, terrain],
   );
+  const topCellsByColor = useMemo(() => {
+    const buckets = new Map<string, TerrainCell[]>();
+    for (const cell of cells) {
+      const bucket = buckets.get(cell.color);
+      if (bucket) {
+        bucket.push(cell);
+      } else {
+        buckets.set(cell.color, [cell]);
+      }
+    }
+    return Array.from(buckets.entries()).map(([color, colorCells]) => ({ color, cells: colorCells }));
+  }, [cells]);
+
+  useLayoutEffect(() => {
+    const columnMesh = columnMeshRef.current;
+    if (!columnMesh) return;
+
+    const dummy = new THREE.Object3D();
+    columnMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    cells.forEach((cell, index) => {
+      dummy.position.set(cell.x, bottom + cell.columnHeight / 2, cell.y);
+      dummy.scale.set(1, cell.columnHeight, 1);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      columnMesh.setMatrixAt(index, dummy.matrix);
+    });
+
+    columnMesh.count = cells.length;
+    columnMesh.instanceMatrix.needsUpdate = true;
+  }, [bottom, cells]);
 
   return (
     <group>
-      {cells.map((cell) => {
-        const columnHeight = Math.max(0.1, cell.height - bottom);
-        return (
-          <group key={cell.key}>
-            <mesh castShadow receiveShadow position={[cell.x, bottom + columnHeight / 2, cell.y]}>
-              <boxGeometry args={[terrain.cellSize * 0.94, columnHeight, terrain.cellSize * 0.94]} />
-              <meshStandardMaterial color="#9a673d" roughness={0.94} />
-            </mesh>
-            <mesh castShadow receiveShadow position={[cell.x, cell.height + 0.035, cell.y]}>
-              <boxGeometry args={[terrain.cellSize * 0.96, 0.07, terrain.cellSize * 0.96]} />
-              <meshStandardMaterial color={heightColor(cell.height)} roughness={0.86} />
-            </mesh>
-          </group>
-        );
-      })}
+      <instancedMesh ref={columnMeshRef} args={[undefined, undefined, cells.length]} castShadow receiveShadow>
+        <boxGeometry args={[terrain.cellSize * 0.94, 1, terrain.cellSize * 0.94]} />
+        <meshStandardMaterial color="#9a673d" roughness={0.94} />
+      </instancedMesh>
+
+      {topCellsByColor.map((bucket) => (
+        <TerrainTopInstances
+          key={bucket.color}
+          cells={bucket.cells}
+          cellSize={terrain.cellSize}
+          color={bucket.color}
+        />
+      ))}
 
       <mesh receiveShadow position={[0, bottom - 0.28, 0]}>
         <boxGeometry args={[terrain.width + 1, 0.45, terrain.depth + 1]} />
