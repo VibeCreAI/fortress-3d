@@ -1,10 +1,7 @@
 import {
-  ChevronDown,
-  Compass,
   Flame,
   HeartPulse,
   Minus,
-  MoveHorizontal,
   Plus,
   RefreshCcw,
   Trophy,
@@ -185,12 +182,25 @@ function rewardMeta(item: RewardItemType) {
 }
 
 function rewardIcon(item: RewardItemType) {
-  if (item === "heal") return <HeartPulse size={18} />;
-  if (item === "moveBoost") return <MoveHorizontal size={18} />;
-  if (item === "windShield") return <WindIcon size={18} />;
-  if (item === "redShot") return <Flame size={18} />;
-  if (item === "earthShot") return <ChevronDown size={18} />;
-  return <Compass size={18} />;
+  return (
+    <img
+      className="reward-icon"
+      src={rewardIconSrc(item)}
+      alt=""
+      aria-hidden="true"
+      decoding="async"
+      loading="lazy"
+    />
+  );
+}
+
+function rewardIconSrc(item: RewardItemType) {
+  if (item === "heal") return "/icons/heal.png";
+  if (item === "moveBoost") return "/icons/move-boost.png";
+  if (item === "windShield") return "/icons/wind-shield.png";
+  if (item === "redShot") return "/icons/red-shot.png";
+  if (item === "earthShot") return "/icons/earth-shot.png";
+  return "/icons/magnet-shot.png";
 }
 
 function shotResultMeta(explosion: ExplosionState) {
@@ -587,7 +597,11 @@ export function GameHUD({
               Next {weaponLabel(queuedWeapon)}
             </span>
           )}
-          {queuedWindIgnoreShots > 0 && <span className="meta-chip effect-wind">Wind Shield</span>}
+          {queuedWindIgnoreShots > 0 && (
+            <span className="meta-chip effect-wind">
+              Wind Shield
+            </span>
+          )}
           {activeMoveBonus > 0 && (
             <span className="meta-chip effect-move">+{activeMoveBonus} move active</span>
           )}
