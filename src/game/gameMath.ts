@@ -456,7 +456,9 @@ export function magnetShotAcceleration(position: Vec3, targetTanks: TankState[],
     return { x: 0, y: 0, z: 0 };
   }
 
-  const strength = MAGNET_SHOT_ACCELERATION * (1 - nearest.distance / MAGNET_SHOT_RANGE);
+  const rangeRatio = clamp(nearest.distance / MAGNET_SHOT_RANGE, 0, 1);
+  const pullRatio = 0.3 + 0.7 * (1 - rangeRatio) * (1 - rangeRatio);
+  const strength = MAGNET_SHOT_ACCELERATION * pullRatio;
   return {
     x: ((nearest.center.x - position.x) / nearest.distance) * strength,
     y: 0,
