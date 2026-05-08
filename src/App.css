@@ -13,7 +13,7 @@
   --control-red: #ef4f55;
   --control-surface: rgba(250, 254, 255, 0.48);
   --control-surface-mobile: rgba(250, 254, 255, 0.54);
-  --mobile-control-bottom: max(56px, env(safe-area-inset-bottom, 0px));
+  --mobile-control-bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) + 6px));
   --shadow: 0 14px 34px rgba(30, 52, 65, 0.18);
 }
 
@@ -1490,11 +1490,11 @@ button {
 
   .camera-zoom-control {
     display: grid;
-    top: 116px;
+    top: 50%;
     right: 8px;
     grid-template-rows: 30px 96px 30px;
     padding: 7px 5px;
-    transform: none;
+    transform: translateY(-50%);
   }
 
   .camera-zoom-range,
@@ -1696,7 +1696,8 @@ button {
   }
 
   .camera-zoom-control {
-    top: 106px;
+    top: 50%;
+    transform: translateY(-50%);
   }
 }
 
@@ -1927,7 +1928,8 @@ button {
   }
 
   .camera-zoom-control {
-    top: 70px;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
   .control-hints {
