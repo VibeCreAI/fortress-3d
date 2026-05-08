@@ -92,6 +92,11 @@ type PowerRangeProps = Pick<
 
 type JoystickVector = { x: number; y: number };
 
+const MOBILE_AIM_DEAD_ZONE = 0.14;
+const MOBILE_AIM_REPEAT_MS = 46;
+const MOBILE_AIM_YAW_DELTA = 1.35;
+const MOBILE_AIM_ELEVATION_DELTA = 0.85;
+
 function hpPercent(hp: number) {
   return `${Math.max(0, Math.min(100, hp))}%`;
 }
@@ -349,6 +354,223 @@ function PowerRange({
   );
 }
 
+function MobilePowerControl({
+  value,
+  min,
+  max,
+  disabled,
+  onDecrease,
+  onIncrease,
+}: Omit<PowerRangeProps, "onSet">) {
+  const fill = normalizePercent(value, min, max);
+
+  return (
+    <div className="mobile-power-control">
+      <div className="mobile-power-row">
+        <button
+          type="button"
+          className="round-step-button mobile-power-step"
+          disabled={disabled}
+          onClick={onDecrease}
+          title="Lower power"
+          aria-label="Lower power"
+        >
+          <Minus size={16} />
+        </button>
+        <strong className="mobile-power-value">{Math.round(Number.parseFloat(fill))}%</strong>
+        <button
+          type="button"
+          className="round-step-button mobile-power-step"
+          disabled={disabled}
+          onClick={onIncrease}
+          title="Raise power"
+          aria-label="Raise power"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MovementMeter({
+  remaining,
+  budget,
+  compact = false,
+}: {
+  remaining: number;
+  budget: number;
+  compact?: boolean;
+}) {
+  const movePercent = hpPercent((remaining / Math.max(1, budget)) * 100);
+
+  return (
+    <div className={`movement-meter${compact ? " movement-meter-compact" : ""}`}>
+      {compact ? (
+        <div className="movement-compact-value">{remaining.toFixed(1)} m</div>
+      ) : (
+        <div className="control-label-row">
+          <span>Movement</span>
+          <strong>{remaining.toFixed(1)} m</strong>
+        </div>
+      )}
+      <div className="movement-track" aria-label="Movement remaining">
+        <div className="movement-fill" style={{ width: movePercent }} />
+      </div>
+    </div>
+  );
+}
+
+function MobileAimJoystick({
+  yaw,
+  elevation,
+  disabled,
+  onYawChange,
+  onElevationChange,
+}: {
+  yaw: number;
+  elevation: number;
+  disabled: boolean;
+  onYawChange: (delta: number) => void;
+  onElevationChange: (delta: number) => void;
+}) {
+  const pointerIdRef = useRef<number | null>(null);
+  const vectorRef = useRef<JoystickVector>({ x: 0, y: 0 });
+  const [vector, setVector] = useState<JoystickVector>({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (disabled) {
+      vectorRef.current = { x: 0, y: 0 };
+      setVector({ x: 0, y: 0 });
+      return undefined;
+    }
+
+    let frame = 0;
+    let lastAimAt = 0;
+    const tick = (time: number) => {
+      const current = vectorRef.current;
+      const yawInput = Math.abs(current.x) > MOBILE_AIM_DEAD_ZONE ? current.x : 0;
+      const elevationInput = Math.abs(current.y) > MOBILE_AIM_DEAD_ZONE ? current.y : 0;
+
+      if ((yawInput || elevationInput) && time - lastAimAt > MOBILE_AIM_REPEAT_MS) {
+        if (yawInput) {
+          onYawChange(yawInput * MOBILE_AIM_YAW_DELTA);
+        }
+        if (elevationInput) {
+          onElevationChange(-elevationInput * MOBILE_AIM_ELEVATION_DELTA);
+        }
+        lastAimAt = time;
+      }
+
+      frame = window.requestAnimationFrame(tick);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [disabled, onElevationChange, onYawChange]);
+
+  const updateVector = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const radius = Math.min(rect.width, rect.height) / 2;
+    const rawX = (event.clientX - (rect.left + rect.width / 2)) / radius;
+    const rawY = ((rect.top + rect.height / 2) - event.clientY) / radius;
+    const magnitude = Math.hypot(rawX, rawY);
+    const next =
+      magnitude > 1
+        ? { x: rawX / magnitude, y: rawY / magnitude }
+        : { x: rawX, y: rawY };
+    vectorRef.current = next;
+    setVector(next);
+  };
+
+  const stop = (event?: ReactPointerEvent<HTMLDivElement>) => {
+    if (event && pointerIdRef.current !== event.pointerId) return;
+    pointerIdRef.current = null;
+    vectorRef.current = { x: 0, y: 0 };
+    setVector({ x: 0, y: 0 });
+  };
+
+  return (
+    <div className={`mobile-aim-controls${disabled ? " mobile-aim-disabled" : ""}`}>
+      <div className="mobile-aim-header">
+        <span>Aim</span>
+      </div>
+      <div className="mobile-aim-pad-wrap">
+        <button
+          type="button"
+          className="aim-step-button aim-step-up"
+          disabled={disabled}
+          onClick={() => onElevationChange(-KEYBOARD_AIM_ELEVATION_STEP)}
+          title="Lower elevation"
+          aria-label="Lower elevation"
+        >
+          <Minus size={15} />
+        </button>
+        <button
+          type="button"
+          className="aim-step-button aim-step-left"
+          disabled={disabled}
+          onClick={() => onYawChange(-KEYBOARD_AIM_YAW_STEP)}
+          title="Rotate left"
+          aria-label="Rotate left"
+        >
+          <Minus size={15} />
+        </button>
+        <div
+          className="aim-joystick-pad"
+          onPointerDown={(event) => {
+            if (disabled) return;
+            pointerIdRef.current = event.pointerId;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            updateVector(event);
+          }}
+          onPointerMove={(event) => {
+            if (disabled || pointerIdRef.current !== event.pointerId) return;
+            updateVector(event);
+          }}
+          onPointerUp={stop}
+          onPointerCancel={stop}
+        >
+          <div
+            className="aim-joystick-thumb"
+            style={{
+              transform: `translate(calc(-50% + ${vector.x * 23}px), calc(-50% + ${-vector.y * 23}px))`,
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          className="aim-step-button aim-step-right"
+          disabled={disabled}
+          onClick={() => onYawChange(KEYBOARD_AIM_YAW_STEP)}
+          title="Rotate right"
+          aria-label="Rotate right"
+        >
+          <Plus size={15} />
+        </button>
+        <button
+          type="button"
+          className="aim-step-button aim-step-down"
+          disabled={disabled}
+          onClick={() => onElevationChange(KEYBOARD_AIM_ELEVATION_STEP)}
+          title="Raise elevation"
+          aria-label="Raise elevation"
+        >
+          <Plus size={15} />
+        </button>
+      </div>
+      <div className="mobile-aim-values">
+        <span>
+          Rotation <strong>{Math.round(yaw)} deg</strong>
+        </span>
+        <span>
+          Elevation <strong>{Math.round(elevation)} deg</strong>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function CameraZoomControl({
   value,
   disabled,
@@ -403,9 +625,13 @@ function CameraZoomControl({
 function MobileJoystick({
   disabled,
   onMove,
+  className = "",
+  travel = 34,
 }: {
   disabled: boolean;
   onMove: (xDirection: number, yDirection: number) => void;
+  className?: string;
+  travel?: number;
 }) {
   const pointerIdRef = useRef<number | null>(null);
   const vectorRef = useRef<JoystickVector>({ x: 0, y: 0 });
@@ -455,7 +681,11 @@ function MobileJoystick({
   };
 
   return (
-    <div className={`joystick-shell${disabled ? " joystick-disabled" : ""}`}>
+    <div
+      className={`joystick-shell${className ? ` ${className}` : ""}${
+        disabled ? " joystick-disabled" : ""
+      }`}
+    >
       <div
         className="joystick-pad"
         onPointerDown={(event) => {
@@ -474,7 +704,7 @@ function MobileJoystick({
         <div
           className="joystick-thumb"
           style={{
-            transform: `translate(calc(-50% + ${vector.x * 34}px), calc(-50% + ${-vector.y * 34}px))`,
+            transform: `translate(calc(-50% + ${vector.x * travel}px), calc(-50% + ${-vector.y * travel}px))`,
           }}
         />
       </div>
@@ -516,7 +746,6 @@ export function GameHUD({
   const enemyCount = computerTanks.length;
   const isChoosingReward = Boolean(rewardChoices);
   const disableCameraZoom = isChoosingReward || phase === "stageClear" || Boolean(winner);
-  const movePercent = hpPercent((playerTank.movementRemaining / Math.max(1, movementBudget)) * 100);
   const [rotationCenterYaw, setRotationCenterYaw] = useState(playerTank.turretYaw);
   const wasPlayerAimingRef = useRef(false);
   const lastStageRef = useRef(stage);
@@ -617,92 +846,125 @@ export function GameHUD({
 
       <section className="control-deck" aria-label="Tank controls">
         <div className="control-card aim-card hud-panel">
-          <AimRange
-            label="Rotation"
-            value={playerTank.turretYaw}
-            min={0}
-            max={360}
-            unit=" deg"
-            sliderValue={rotationOffset}
-            sliderMin={-180}
-            sliderMax={180}
-            disabled={disableControls}
-            onDecrease={() => onTurretYawChange(-KEYBOARD_AIM_YAW_STEP)}
-            onIncrease={() => onTurretYawChange(KEYBOARD_AIM_YAW_STEP)}
-            onSet={onTurretYawSet}
-            onSliderSet={(offset) => onTurretYawSet(rotationCenterYaw + offset)}
-          />
-          <AimRange
-            label="Elevation"
-            value={playerTank.elevation}
-            min={MIN_ELEVATION}
-            max={MAX_ELEVATION}
-            unit=" deg"
-            sliderValue={elevationOffset}
-            sliderMin={-100}
-            sliderMax={100}
-            disabled={disableControls}
-            onDecrease={() => onElevationChange(-KEYBOARD_AIM_ELEVATION_STEP)}
-            onIncrease={() => onElevationChange(KEYBOARD_AIM_ELEVATION_STEP)}
-            onSet={onElevationSet}
-            onSliderSet={(offset) =>
-              onElevationSet(
-                centeredOffsetToValue(offset, DEFAULT_ELEVATION, MIN_ELEVATION, MAX_ELEVATION),
-              )
-            }
-          />
-          <div className="movement-meter">
-            <div className="control-label-row">
-              <span>Movement</span>
-              <strong>{playerTank.movementRemaining.toFixed(1)} m</strong>
-            </div>
-            <div className="movement-track">
-              <div className="movement-fill" style={{ width: movePercent }} />
+          <div className="desktop-aim-controls">
+            <AimRange
+              label="Rotation"
+              value={playerTank.turretYaw}
+              min={0}
+              max={360}
+              unit=" deg"
+              sliderValue={rotationOffset}
+              sliderMin={-180}
+              sliderMax={180}
+              disabled={disableControls}
+              onDecrease={() => onTurretYawChange(-KEYBOARD_AIM_YAW_STEP)}
+              onIncrease={() => onTurretYawChange(KEYBOARD_AIM_YAW_STEP)}
+              onSet={onTurretYawSet}
+              onSliderSet={(offset) => onTurretYawSet(rotationCenterYaw + offset)}
+            />
+            <AimRange
+              label="Elevation"
+              value={playerTank.elevation}
+              min={MIN_ELEVATION}
+              max={MAX_ELEVATION}
+              unit=" deg"
+              sliderValue={elevationOffset}
+              sliderMin={-100}
+              sliderMax={100}
+              disabled={disableControls}
+              onDecrease={() => onElevationChange(-KEYBOARD_AIM_ELEVATION_STEP)}
+              onIncrease={() => onElevationChange(KEYBOARD_AIM_ELEVATION_STEP)}
+              onSet={onElevationSet}
+              onSliderSet={(offset) =>
+                onElevationSet(
+                  centeredOffsetToValue(offset, DEFAULT_ELEVATION, MIN_ELEVATION, MAX_ELEVATION),
+                )
+              }
+            />
+            <MovementMeter
+              remaining={playerTank.movementRemaining}
+              budget={movementBudget}
+            />
+            <div className="desktop-card-guide">
+              <span>
+                <kbd>Arrow Keys</kbd>
+                Aim
+              </span>
             </div>
           </div>
-          <div className="desktop-card-guide">
-            <span>
-              <kbd>Arrow Keys</kbd>
-              Aim
-            </span>
-          </div>
+          <MobileAimJoystick
+            yaw={playerTank.turretYaw}
+            elevation={playerTank.elevation}
+            disabled={disableControls}
+            onYawChange={onTurretYawChange}
+            onElevationChange={onElevationChange}
+          />
         </div>
 
-        <button
-          type="button"
-          className="fire-orb"
-          disabled={disableControls}
-          onClick={onFire}
-          title="Fire"
-        >
-          <Flame size={22} />
-          FIRE!
-        </button>
-
-        <div className="control-card power-card hud-panel">
-          <PowerRange
+        <div className="fire-cluster">
+          <div
+            className="fire-button-wrap"
+            style={
+              {
+                "--power-fill": normalizePercent(playerTank.power, MIN_POWER, MAX_POWER),
+              } as CSSProperties
+            }
+          >
+            <button
+              type="button"
+              className="fire-orb"
+              disabled={disableControls}
+              onClick={onFire}
+              title="Fire"
+            >
+              <Flame size={22} />
+              FIRE!
+            </button>
+          </div>
+          <MobilePowerControl
             value={playerTank.power}
             min={MIN_POWER}
             max={MAX_POWER}
             disabled={disableControls}
             onDecrease={() => onPowerChange(-3)}
             onIncrease={() => onPowerChange(3)}
-            onSet={onPowerSet}
           />
-          <div className="desktop-card-guide power-key-guide">
-            <span>
-              <kbd>E</kbd>
-              + Power
-            </span>
-            <span>
-              <kbd>Q</kbd>
-              - Power
-            </span>
+        </div>
+
+        <div className="control-card power-card move-card hud-panel">
+          <div className="desktop-power-controls">
+            <PowerRange
+              value={playerTank.power}
+              min={MIN_POWER}
+              max={MAX_POWER}
+              disabled={disableControls}
+              onDecrease={() => onPowerChange(-3)}
+              onIncrease={() => onPowerChange(3)}
+              onSet={onPowerSet}
+            />
+            <div className="desktop-card-guide power-key-guide">
+              <span>
+                <kbd>E</kbd>
+                + Power
+              </span>
+              <span>
+                <kbd>Q</kbd>
+                - Power
+              </span>
+            </div>
+          </div>
+          <div className="mobile-move-controls">
+            <div className="mobile-move-header">Move</div>
+            <MobileJoystick disabled={disableControls} onMove={onJoystickMove} travel={25} />
+            <MovementMeter
+              remaining={playerTank.movementRemaining}
+              budget={movementBudget}
+              compact
+            />
           </div>
         </div>
       </section>
 
-      <MobileJoystick disabled={disableControls} onMove={onJoystickMove} />
       <CameraZoomControl
         value={cameraDistance}
         disabled={disableCameraZoom}

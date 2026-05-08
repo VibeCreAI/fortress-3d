@@ -664,6 +664,23 @@ button {
   gap: 8px;
 }
 
+.desktop-aim-controls,
+.desktop-power-controls {
+  display: grid;
+  gap: 8px;
+  height: 100%;
+}
+
+.desktop-power-controls {
+  grid-template-rows: 1fr auto;
+}
+
+.mobile-aim-controls,
+.mobile-power-control,
+.mobile-move-controls {
+  display: none;
+}
+
 .control-label-row {
   display: flex;
   align-items: center;
@@ -794,7 +811,43 @@ button {
   transition: width 160ms ease;
 }
 
+.fire-cluster {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.fire-button-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 116px;
+  height: 116px;
+  pointer-events: none;
+}
+
+.fire-button-wrap::before {
+  position: absolute;
+  inset: 0;
+  display: none;
+  border-radius: 999px;
+  background:
+    conic-gradient(
+      from -90deg,
+      var(--control-blue) 0 var(--power-fill),
+      rgba(255, 255, 255, 0.38) var(--power-fill) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 10px 24px rgba(18, 40, 54, 0.14);
+  content: "";
+}
+
 .fire-orb {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -932,6 +985,209 @@ button {
 .power-vertical-range::-moz-range-thumb {
   width: 24px;
   height: 24px;
+}
+
+.mobile-aim-controls {
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  height: 100%;
+}
+
+.mobile-aim-header,
+.mobile-move-header,
+.mobile-power-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  color: #46606d;
+  font-size: 0.64rem;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.mobile-move-header {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.mobile-power-title strong {
+  color: var(--control-blue);
+  font-size: 0.75rem;
+}
+
+.mobile-aim-pad-wrap {
+  display: grid;
+  grid-template-columns: 25px 78px 25px;
+  grid-template-rows: 24px 78px 24px;
+  align-items: center;
+  justify-content: center;
+  justify-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+.aim-joystick-pad {
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  width: 78px;
+  height: 78px;
+  border: 1px solid rgba(24, 49, 63, 0.14);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.46)),
+    rgba(255, 255, 255, 0.56);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 8px 18px rgba(18, 40, 54, 0.12);
+  touch-action: none;
+}
+
+.aim-joystick-pad::before,
+.aim-joystick-pad::after {
+  position: absolute;
+  content: "";
+  background: rgba(24, 49, 63, 0.13);
+}
+
+.aim-joystick-pad::before {
+  left: 50%;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.aim-joystick-pad::after {
+  left: 12px;
+  right: 12px;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.aim-joystick-thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #6ed7ff, var(--control-blue));
+  box-shadow: 0 7px 16px rgba(25, 136, 255, 0.32);
+}
+
+.aim-step-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border: 2px solid var(--control-blue);
+  border-radius: 999px;
+  color: var(--control-blue);
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.aim-step-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.aim-step-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.aim-step-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.aim-step-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.aim-step-down {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.mobile-aim-values {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  color: #526976;
+  font-size: 0.6rem;
+  font-weight: 850;
+  line-height: 1.1;
+  transform: translateY(-5px);
+}
+
+.mobile-aim-values span {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.mobile-aim-values strong {
+  color: var(--control-blue);
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.mobile-aim-disabled {
+  opacity: 0.48;
+}
+
+.mobile-power-control {
+  width: min(108px, 100%);
+  padding: 6px;
+  border: 1px solid rgba(24, 49, 63, 0.12);
+  border-radius: 8px;
+  background: rgba(250, 254, 255, 0.5);
+  pointer-events: auto;
+}
+
+.mobile-power-row {
+  display: grid;
+  grid-template-columns: 25px minmax(32px, 1fr) 25px;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-power-step {
+  width: 25px;
+  height: 25px;
+}
+
+.mobile-power-value {
+  color: var(--control-blue);
+  font-size: 0.8rem;
+  font-weight: 950;
+  line-height: 1;
+  text-align: center;
+}
+
+.movement-meter-compact {
+  width: 100%;
+  gap: 4px;
+}
+
+.movement-compact-value {
+  color: var(--control-blue);
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1;
+  text-align: center;
 }
 
 .control-hints {
@@ -1234,6 +1490,17 @@ button {
 
   .camera-zoom-control {
     display: grid;
+    top: 116px;
+    right: 8px;
+    grid-template-rows: 30px 96px 30px;
+    padding: 7px 5px;
+    transform: none;
+  }
+
+  .camera-zoom-range,
+  .camera-zoom-range::-webkit-slider-runnable-track,
+  .camera-zoom-range::-moz-range-track {
+    height: 96px;
   }
 
   .desktop-card-guide {
@@ -1280,12 +1547,11 @@ button {
     left: 8px;
     right: 8px;
     bottom: var(--mobile-control-bottom);
-    grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr);
-    grid-template-rows: 72px 112px;
+    grid-template-columns: minmax(112px, 1fr) minmax(78px, 0.7fr) minmax(112px, 1fr);
+    grid-template-rows: 1fr;
     grid-template-areas:
-      "aim fire power"
-      "aim center power";
-    align-items: stretch;
+      "aim fire move";
+    align-items: end;
     gap: 6px;
     transform: none;
   }
@@ -1294,6 +1560,7 @@ button {
     width: 100%;
     min-width: 0;
     min-height: 190px;
+    height: 190px;
     background: var(--control-surface-mobile);
   }
 
@@ -1301,26 +1568,52 @@ button {
     display: none;
   }
 
-  .aim-card {
+  .aim-card,
+  .move-card {
     grid-area: aim;
     gap: 7px;
-    padding: 8px;
+    padding: 8px 6px;
   }
 
-  .power-card {
-    grid-area: power;
+  .move-card {
+    grid-area: move;
     width: 100%;
-    gap: 10px;
-    padding: 8px;
+    grid-template-rows: 1fr;
+    align-content: stretch;
   }
 
-  .fire-orb {
+  .desktop-aim-controls,
+  .desktop-power-controls {
+    display: none;
+  }
+
+  .mobile-aim-controls,
+  .mobile-move-controls,
+  .mobile-power-control {
+    display: grid;
+  }
+
+  .fire-cluster {
     grid-area: fire;
     justify-self: center;
     align-self: end;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .fire-orb {
     width: 68px;
     height: 68px;
     font-size: 0.84rem;
+  }
+
+  .fire-button-wrap {
+    width: 84px;
+    height: 84px;
+  }
+
+  .fire-button-wrap::before {
+    display: block;
   }
 
   .control-label-row {
@@ -1359,21 +1652,51 @@ button {
     height: 8px;
   }
 
-  .joystick-shell {
-    display: block;
+  .mobile-move-controls {
+    position: relative;
+    align-content: initial;
+    justify-items: initial;
+    gap: 0;
+    height: 100%;
+  }
+
+  .mobile-move-controls .joystick-shell {
+    position: absolute;
     left: 50%;
-    bottom: var(--mobile-control-bottom);
-    width: 104px;
-    transform: translateX(-50%);
+    top: calc(46% - 5px);
+    display: block;
+    width: auto;
+    transform: translate(-50%, -50%);
+  }
+
+  .mobile-move-controls .movement-meter {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
   }
 
   .control-hints {
     display: none;
   }
 
-  .joystick-pad {
-    width: 100px;
-    height: 100px;
+  .mobile-move-controls .joystick-pad {
+    width: 82px;
+    height: 82px;
+    background: rgba(255, 255, 255, 0.56);
+  }
+
+  .mobile-move-controls .joystick-thumb {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-move-controls .movement-track {
+    height: 8px;
+  }
+
+  .camera-zoom-control {
+    top: 106px;
   }
 }
 
@@ -1396,20 +1719,25 @@ button {
   .control-deck {
     left: 6px;
     right: 6px;
-    grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr);
-    grid-template-rows: 66px 108px;
+    grid-template-columns: minmax(106px, 1fr) minmax(72px, 0.68fr) minmax(106px, 1fr);
     gap: 5px;
   }
 
   .control-card {
-    min-height: 184px;
+    min-height: 164px;
+    height: 164px;
     padding: 7px 6px;
   }
 
   .fire-orb {
-    width: 62px;
-    height: 62px;
+    width: 58px;
+    height: 58px;
     font-size: 0.78rem;
+  }
+
+  .fire-button-wrap {
+    width: 74px;
+    height: 74px;
   }
 
   .range-row {
@@ -1422,16 +1750,43 @@ button {
     height: 26px;
   }
 
-  .joystick-shell {
-    left: 50%;
-    bottom: var(--mobile-control-bottom);
-    width: 96px;
-    transform: translateX(-50%);
+  .mobile-aim-pad-wrap {
+    grid-template-columns: 23px 70px 23px;
+    grid-template-rows: 22px 70px 22px;
   }
 
-  .joystick-pad {
-    width: 92px;
-    height: 92px;
+  .aim-joystick-pad {
+    width: 70px;
+    height: 70px;
+  }
+
+  .aim-joystick-thumb {
+    width: 31px;
+    height: 31px;
+  }
+
+  .aim-step-button {
+    width: 23px;
+    height: 23px;
+  }
+
+  .mobile-move-controls .joystick-pad {
+    width: 76px;
+    height: 76px;
+  }
+
+  .mobile-power-control {
+    padding: 6px 5px;
+  }
+
+  .mobile-power-row {
+    grid-template-columns: 23px minmax(28px, 1fr) 23px;
+    gap: 3px;
+  }
+
+  .mobile-power-step {
+    width: 23px;
+    height: 23px;
   }
 }
 
@@ -1456,21 +1811,22 @@ button {
     right: 8px;
     bottom: var(--mobile-control-bottom);
     width: auto;
-    grid-template-columns: minmax(190px, 1fr) 104px minmax(190px, 1fr);
-    grid-template-rows: 70px 100px;
+    grid-template-columns: minmax(154px, 1fr) minmax(86px, 0.58fr) minmax(154px, 1fr);
+    grid-template-rows: 1fr;
     grid-template-areas:
-      "aim fire power"
-      "aim center power";
+      "aim fire move";
     gap: 8px;
     transform: none;
   }
 
   .control-card {
     width: 100%;
-    min-height: 170px;
+    min-height: 150px;
+    height: 150px;
   }
 
-  .aim-card {
+  .aim-card,
+  .move-card {
     grid-area: aim;
     width: 100%;
     gap: 5px;
@@ -1478,32 +1834,100 @@ button {
   }
 
   .fire-orb {
-    grid-area: fire;
-    justify-self: center;
-    align-self: end;
-    width: 70px;
-    height: 70px;
+    width: 62px;
+    height: 62px;
     font-size: 0.9rem;
   }
 
-  .power-card {
-    grid-area: power;
+  .fire-button-wrap {
+    width: 78px;
+    height: 78px;
+  }
+
+  .fire-button-wrap::before {
+    display: block;
+  }
+
+  .move-card {
+    grid-area: move;
     width: 100%;
-    min-height: 170px;
+    min-height: 150px;
+    height: 150px;
+    grid-template-rows: 1fr;
+    align-content: stretch;
     padding: 8px;
   }
 
-  .joystick-shell {
-    display: block;
-    left: 50%;
-    width: 100px;
-    bottom: var(--mobile-control-bottom);
-    transform: translateX(-50%);
+  .desktop-aim-controls,
+  .desktop-power-controls,
+  .desktop-card-guide {
+    display: none;
   }
 
-  .joystick-pad {
-    width: 96px;
-    height: 96px;
+  .mobile-aim-controls,
+  .mobile-move-controls,
+  .mobile-power-control {
+    display: grid;
+  }
+
+  .fire-cluster {
+    grid-area: fire;
+    justify-self: center;
+    align-self: end;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .mobile-move-controls {
+    position: relative;
+    align-content: initial;
+    justify-items: initial;
+    gap: 0;
+    height: 100%;
+  }
+
+  .mobile-move-controls .joystick-shell {
+    position: absolute;
+    left: 50%;
+    top: calc(46% - 5px);
+    display: block;
+    width: auto;
+    transform: translate(-50%, -50%);
+  }
+
+  .mobile-move-controls .movement-meter {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .mobile-aim-pad-wrap {
+    grid-template-columns: 24px 72px 24px;
+    grid-template-rows: 22px 72px 22px;
+  }
+
+  .aim-joystick-pad {
+    width: 72px;
+    height: 72px;
+  }
+
+  .mobile-move-controls .joystick-pad {
+    width: 76px;
+    height: 76px;
+  }
+
+  .mobile-move-controls .joystick-thumb {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-power-control {
+    width: min(104px, 100%);
+  }
+
+  .camera-zoom-control {
+    top: 70px;
   }
 
   .control-hints {
