@@ -9,6 +9,8 @@ import {
   RefreshCcw,
   Trophy,
   Wind as WindIcon,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   useEffect,
@@ -25,6 +27,8 @@ import {
   MAX_POWER,
   MIN_ELEVATION,
   MIN_POWER,
+  OMNISCIENT_MAX_DISTANCE,
+  OMNISCIENT_MIN_DISTANCE,
 } from "../game/constants";
 import type {
   ExplosionState,
@@ -53,6 +57,7 @@ type GameHUDProps = {
   queuedWindIgnoreShots: number;
   activeMoveBonus: number;
   movementBudget: number;
+  cameraDistance: number;
   onTurretYawChange: (delta: number) => void;
   onTurretYawSet: (value: number) => void;
   onElevationChange: (delta: number) => void;
@@ -60,6 +65,8 @@ type GameHUDProps = {
   onPowerChange: (delta: number) => void;
   onPowerSet: (value: number) => void;
   onJoystickMove: (xDirection: number, yDirection: number) => void;
+  onCameraZoomChange: (delta: number) => void;
+  onCameraZoomSet: (value: number) => void;
   onFire: () => void;
   onRewardChoice: (item: RewardItemType) => void;
   onReset: () => void;
@@ -332,6 +339,57 @@ function PowerRange({
   );
 }
 
+function CameraZoomControl({
+  value,
+  disabled,
+  onChange,
+  onSet,
+}: {
+  value: number;
+  disabled: boolean;
+  onChange: (delta: number) => void;
+  onSet: (value: number) => void;
+}) {
+  const fill = normalizePercent(value, OMNISCIENT_MIN_DISTANCE, OMNISCIENT_MAX_DISTANCE);
+
+  return (
+    <div className={`camera-zoom-control${disabled ? " camera-zoom-disabled" : ""}`}>
+      <button
+        type="button"
+        className="camera-zoom-button"
+        disabled={disabled}
+        onClick={() => onChange(-4)}
+        title="Zoom in"
+        aria-label="Zoom in"
+      >
+        <ZoomIn size={18} />
+      </button>
+      <input
+        className="camera-zoom-range"
+        type="range"
+        min={OMNISCIENT_MIN_DISTANCE}
+        max={OMNISCIENT_MAX_DISTANCE}
+        step={1}
+        value={Math.round(value)}
+        disabled={disabled}
+        onChange={(event) => onSet(Number(event.currentTarget.value))}
+        style={{ "--fill": fill } as CSSProperties}
+        aria-label="Camera zoom"
+      />
+      <button
+        type="button"
+        className="camera-zoom-button"
+        disabled={disabled}
+        onClick={() => onChange(4)}
+        title="Zoom out"
+        aria-label="Zoom out"
+      >
+        <ZoomOut size={18} />
+      </button>
+    </div>
+  );
+}
+
 function MobileJoystick({
   disabled,
   onMove,
@@ -430,6 +488,7 @@ export function GameHUD({
   queuedWindIgnoreShots,
   activeMoveBonus,
   movementBudget,
+  cameraDistance,
   onTurretYawChange,
   onTurretYawSet,
   onElevationChange,
@@ -437,6 +496,8 @@ export function GameHUD({
   onPowerChange,
   onPowerSet,
   onJoystickMove,
+  onCameraZoomChange,
+  onCameraZoomSet,
   onFire,
   onRewardChoice,
   onReset,
@@ -444,6 +505,7 @@ export function GameHUD({
   const disableControls = !canPlayerAct;
   const enemyCount = computerTanks.length;
   const isChoosingReward = Boolean(rewardChoices);
+  const disableCameraZoom = isChoosingReward || phase === "stageClear" || Boolean(winner);
   const movePercent = hpPercent((playerTank.movementRemaining / Math.max(1, movementBudget)) * 100);
   const [rotationCenterYaw, setRotationCenterYaw] = useState(playerTank.turretYaw);
   const wasPlayerAimingRef = useRef(false);
@@ -627,6 +689,12 @@ export function GameHUD({
       </section>
 
       <MobileJoystick disabled={disableControls} onMove={onJoystickMove} />
+      <CameraZoomControl
+        value={cameraDistance}
+        disabled={disableCameraZoom}
+        onChange={onCameraZoomChange}
+        onSet={onCameraZoomSet}
+      />
 
       <div className="control-hints">
         <span>Drag Rotate</span>

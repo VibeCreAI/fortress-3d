@@ -205,11 +205,10 @@ export default function App() {
   const cameraDragModeRef = useRef<"rotate" | "pan" | null>(null);
   const activeTouchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const touchGestureRef = useRef<{
-    mode: "rotate" | "panZoom" | null;
+    mode: "rotate" | "pan" | null;
     x: number;
     y: number;
-    distance: number;
-  }>({ mode: null, x: 0, y: 0, distance: 0 });
+  }>({ mode: null, x: 0, y: 0 });
   omnRef.current.distance = omniscientDistance;
 
   const otherTanksFor = useCallback(
@@ -630,6 +629,20 @@ export default function App() {
       (-Math.sin(yawRad) * xDelta + Math.cos(yawRad) * yDelta) * speed;
   }, []);
 
+  const setCameraZoomValue = useCallback((value: number) => {
+    const next = clamp(value, OMNISCIENT_MIN_DISTANCE, OMNISCIENT_MAX_DISTANCE);
+    omnRef.current.distance = next;
+    setOmniscientDistance(next);
+  }, []);
+
+  const adjustCameraZoom = useCallback((delta: number) => {
+    setOmniscientDistance((value) => {
+      const next = clamp(value + delta, OMNISCIENT_MIN_DISTANCE, OMNISCIENT_MAX_DISTANCE);
+      omnRef.current.distance = next;
+      return next;
+    });
+  }, []);
+
   // Mouse: rotate / pan camera
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
@@ -676,7 +689,7 @@ export default function App() {
     };
   }, [panCameraByScreenDelta]);
 
-  // Touch: one-finger rotate, two-finger pan and pinch zoom
+  // Touch: one-finger rotate, two-finger pan. Zoom is handled by the HUD zoom control.
   useEffect(() => {
     const activePointers = activeTouchPointersRef.current;
     const touchGesture = touchGestureRef.current;
@@ -688,10 +701,7 @@ export default function App() {
         x: (points[0].x + points[1].x) / 2,
         y: (points[0].y + points[1].y) / 2,
       };
-      return {
-        ...midpoint,
-        distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
-      };
+      return midpoint;
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -704,14 +714,12 @@ export default function App() {
         touchGesture.mode = "rotate";
         touchGesture.x = event.clientX;
         touchGesture.y = event.clientY;
-        touchGesture.distance = 0;
       } else {
         const gesture = twoPointerGesture();
         if (gesture) {
-          touchGesture.mode = "panZoom";
+          touchGesture.mode = "pan";
           touchGesture.x = gesture.x;
           touchGesture.y = gesture.y;
-          touchGesture.distance = gesture.distance;
         }
       }
       event.preventDefault();
@@ -733,26 +741,14 @@ export default function App() {
       } else if (activePointers.size >= 2) {
         const gesture = twoPointerGesture();
         if (gesture) {
-          if (touchGesture.mode !== "panZoom") {
-            touchGesture.mode = "panZoom";
+          if (touchGesture.mode !== "pan") {
+            touchGesture.mode = "pan";
             touchGesture.x = gesture.x;
             touchGesture.y = gesture.y;
-            touchGesture.distance = gesture.distance;
           } else {
             panCameraByScreenDelta(gesture.x - touchGesture.x, gesture.y - touchGesture.y);
-            const pinchDelta = gesture.distance - touchGesture.distance;
-            setOmniscientDistance((value) => {
-              const next = clamp(
-                value - pinchDelta * 0.08,
-                OMNISCIENT_MIN_DISTANCE,
-                OMNISCIENT_MAX_DISTANCE,
-              );
-              omnRef.current.distance = next;
-              return next;
-            });
             touchGesture.x = gesture.x;
             touchGesture.y = gesture.y;
-            touchGesture.distance = gesture.distance;
           }
         }
       }
@@ -768,10 +764,8 @@ export default function App() {
         touchGesture.mode = "rotate";
         touchGesture.x = remaining.x;
         touchGesture.y = remaining.y;
-        touchGesture.distance = 0;
       } else if (activePointers.size === 0) {
         touchGesture.mode = null;
-        touchGesture.distance = 0;
       }
     };
 
@@ -1013,6 +1007,7 @@ export default function App() {
         queuedWindIgnoreShots={queuedWindIgnoreShots}
         activeMoveBonus={activeMoveBonus}
         movementBudget={playerMovementBudget}
+        cameraDistance={omniscientDistance}
         onTurretYawChange={adjustTurretYaw}
         onTurretYawSet={setTurretYawValue}
         onElevationChange={adjustElevation}
@@ -1020,6 +1015,8 @@ export default function App() {
         onPowerChange={adjustPower}
         onPowerSet={setPowerValue}
         onJoystickMove={movePlayerCameraRelative}
+        onCameraZoomChange={adjustCameraZoom}
+        onCameraZoomSet={setCameraZoomValue}
         onFire={firePlayer}
         onRewardChoice={chooseReward}
         onReset={resetGame}
