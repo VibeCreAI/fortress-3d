@@ -45,6 +45,7 @@ type GameSceneProps = {
   playerPreviewWeapon: WeaponType;
   playerPreviewIgnoresWind: boolean;
   omnRef: MutableRefObject<OmnCam>;
+  cameraSmoothRef: MutableRefObject<boolean>;
   onProjectileImpact: (position: Vec3, profile: ProjectileImpactProfile) => void;
 };
 
@@ -99,7 +100,8 @@ function CameraRig({
   turnOwner,
   phase,
   activeEnemy,
-}: Pick<GameSceneProps, "terrain" | "omnRef" | "projectile" | "explosion" | "supplyDrops" | "turnOwner" | "phase"> & {
+  cameraSmoothRef,
+}: Pick<GameSceneProps, "terrain" | "omnRef" | "projectile" | "explosion" | "supplyDrops" | "turnOwner" | "phase" | "cameraSmoothRef"> & {
   projectileFocusRef: MutableRefObject<ProjectileFocus>;
   activeEnemy: TankState | null;
 }) {
@@ -118,6 +120,11 @@ function CameraRig({
 
   useFrame(() => {
     const baseFov = size.width / size.height < 0.75 ? 58 : 50;
+
+    if (cameraSmoothRef.current) {
+      returningFromCinematicRef.current = true;
+      cameraSmoothRef.current = false;
+    }
 
     const activeProjectile = projectile;
     const focus = projectileFocusRef.current;
@@ -308,6 +315,7 @@ export function GameScene({
   phase,
   wind,
   omnRef,
+  cameraSmoothRef,
   projectile,
   explosion,
   supplyDrops,
@@ -358,6 +366,7 @@ export function GameScene({
       <CameraRig
         terrain={terrain}
         omnRef={omnRef}
+        cameraSmoothRef={cameraSmoothRef}
         projectile={projectile}
         explosion={explosion}
         supplyDrops={supplyDrops}

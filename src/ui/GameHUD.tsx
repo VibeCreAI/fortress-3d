@@ -1,13 +1,19 @@
 import {
+  Crosshair,
   Flame,
   HeartPulse,
+  Map as MapIcon,
   Minus,
+  MoveLeft,
+  MoveRight,
+  Mountain,
   Plus,
   RefreshCcw,
   Trophy,
   Wind as WindIcon,
   ZoomIn,
   ZoomOut,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useEffect,
@@ -38,6 +44,8 @@ import type {
   Wind,
 } from "../game/gameTypes";
 
+export type SavedCameraView = "player" | "sideRight" | "sideLeft" | "tilted" | "topDown";
+
 type GameHUDProps = {
   stage: number;
   playerTank: TankState;
@@ -64,6 +72,7 @@ type GameHUDProps = {
   onJoystickMove: (xDirection: number, yDirection: number) => void;
   onCameraZoomChange: (delta: number) => void;
   onCameraZoomSet: (value: number) => void;
+  onApplySavedView: (view: SavedCameraView) => void;
   onFire: () => void;
   onRewardChoice: (item: RewardItemType) => void;
   onReset: () => void;
@@ -571,6 +580,44 @@ function MobileAimJoystick({
   );
 }
 
+const SAVED_VIEW_BUTTONS: Array<{
+  view: SavedCameraView;
+  label: string;
+  Icon: LucideIcon;
+}> = [
+  { view: "player", label: "Player view", Icon: Crosshair },
+  { view: "sideRight", label: "Side view from right", Icon: MoveLeft },
+  { view: "sideLeft", label: "Side view from left", Icon: MoveRight },
+  { view: "tilted", label: "Tilted top-down (45°)", Icon: Mountain },
+  { view: "topDown", label: "Top-down view", Icon: MapIcon },
+];
+
+function SavedViewsControl({
+  disabled,
+  onApply,
+}: {
+  disabled: boolean;
+  onApply: (view: SavedCameraView) => void;
+}) {
+  return (
+    <div className={`saved-views-control${disabled ? " saved-views-disabled" : ""}`}>
+      {SAVED_VIEW_BUTTONS.map(({ view, label, Icon }) => (
+        <button
+          key={view}
+          type="button"
+          className="saved-view-button"
+          disabled={disabled}
+          onClick={() => onApply(view)}
+          title={label}
+          aria-label={label}
+        >
+          <Icon size={18} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function CameraZoomControl({
   value,
   disabled,
@@ -738,6 +785,7 @@ export function GameHUD({
   onJoystickMove,
   onCameraZoomChange,
   onCameraZoomSet,
+  onApplySavedView,
   onFire,
   onRewardChoice,
   onReset,
@@ -964,6 +1012,11 @@ export function GameHUD({
           </div>
         </div>
       </section>
+
+      <SavedViewsControl
+        disabled={disableCameraZoom}
+        onApply={onApplySavedView}
+      />
 
       <CameraZoomControl
         value={cameraDistance}

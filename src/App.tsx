@@ -61,7 +61,7 @@ import type {
   Vec3,
   WeaponType,
 } from "./game/gameTypes";
-import { GameHUD } from "./ui/GameHUD";
+import { GameHUD, type SavedCameraView } from "./ui/GameHUD";
 
 function makeTank(
   terrain: TerrainState,
@@ -202,6 +202,7 @@ export default function App() {
     turnOwner === "player" && phase === "aiming" && !winner && !pendingRewardChoices;
 
   const omnRef = useRef({ yaw: 10, pitch: 60, panX: 0, panZ: 0, distance: OMNISCIENT_DEFAULT_DISTANCE });
+  const cameraSmoothRef = useRef(false);
   const cameraDragModeRef = useRef<"rotate" | "pan" | null>(null);
   const activeTouchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const touchGestureRef = useRef<{
@@ -643,6 +644,109 @@ export default function App() {
     });
   }, []);
 
+  const applySavedView = useCallback(
+    (view: SavedCameraView) => {
+      const aliveEnemies = computerTanks.filter((t) => t.hp > 0);
+      const points: GroundPos[] = [
+        { x: playerTank.position.x, y: playerTank.position.y },
+        ...aliveEnemies.map((t) => ({ x: t.position.x, y: t.position.y })),
+      ];
+      const sumX = points.reduce((s, p) => s + p.x, 0);
+      const sumY = points.reduce((s, p) => s + p.y, 0);
+      const midpoint: GroundPos = {
+        x: sumX / points.length,
+        y: sumY / points.length,
+      };
+
+      let yawDeg = omnRef.current.yaw;
+      let pitchDeg = omnRef.current.pitch;
+      let nextDistance = omnRef.current.distance;
+      let nextPanX = omnRef.current.panX;
+      let nextPanZ = omnRef.current.panZ;
+
+      switch (view) {
+        case "player": {
+          let targetX = playerTank.position.x;
+          let targetY = playerTank.position.y;
+          let nearestDist = Infinity;
+          let foundEnemy = false;
+          for (const enemy of computerTanks) {
+            if (enemy.hp <= 0) continue;
+            const d = Math.hypot(
+              enemy.position.x - playerTank.position.x,
+              enemy.position.y - playerTank.position.y,
+            );
+            if (d < nearestDist) {
+              nearestDist = d;
+              targetX = enemy.position.x;
+              targetY = enemy.position.y;
+              foundEnemy = true;
+            }
+          }
+          if (!foundEnemy) {
+            const yawRad = (playerTank.bodyYaw * Math.PI) / 180;
+            targetX = playerTank.position.x + Math.cos(yawRad) * 10;
+            targetY = playerTank.position.y + Math.sin(yawRad) * 10;
+          }
+          const dirX = targetX - playerTank.position.x;
+          const dirY = targetY - playerTank.position.y;
+          const mag = Math.hypot(dirX, dirY) || 1;
+          const fwdX = dirX / mag;
+          const fwdY = dirY / mag;
+          yawDeg = (Math.atan2(-fwdX, -fwdY) * 180) / Math.PI;
+          pitchDeg = 22;
+          nextPanX = (playerTank.position.x + targetX) / 2;
+          nextPanZ = (playerTank.position.y + targetY) / 2;
+          const horizontalRadial = mag / 2 + 9;
+          nextDistance = horizontalRadial / Math.cos((pitchDeg * Math.PI) / 180);
+          break;
+        }
+        case "sideRight":
+          yawDeg = 0;
+          pitchDeg = 14;
+          nextDistance = 46;
+          nextPanX = midpoint.x;
+          nextPanZ = midpoint.y;
+          break;
+        case "sideLeft":
+          yawDeg = 180;
+          pitchDeg = 14;
+          nextDistance = 46;
+          nextPanX = midpoint.x;
+          nextPanZ = midpoint.y;
+          break;
+        case "tilted":
+          yawDeg = 270;
+          pitchDeg = 45;
+          nextDistance = 38;
+          nextPanX = midpoint.x;
+          nextPanZ = midpoint.y;
+          break;
+        case "topDown":
+          yawDeg = 270;
+          pitchDeg = 86;
+          nextDistance = 32;
+          nextPanX = midpoint.x;
+          nextPanZ = midpoint.y;
+          break;
+      }
+
+      const clampedDistance = clamp(
+        nextDistance,
+        OMNISCIENT_MIN_DISTANCE,
+        OMNISCIENT_MAX_DISTANCE,
+      );
+      omnRef.current.yaw = normalizeDegrees(yawDeg);
+      omnRef.current.pitch = clamp(pitchDeg, 8, 88);
+      omnRef.current.panX = nextPanX;
+      omnRef.current.panZ = nextPanZ;
+      omnRef.current.distance = clampedDistance;
+      setOmniscientDistance(clampedDistance);
+      cameraSmoothRef.current = true;
+    },
+    [computerTanks, playerTank.bodyYaw, playerTank.position.x, playerTank.position.y],
+  );
+
   // Mouse: rotate / pan camera
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
@@ -965,6 +1069,7 @@ export default function App() {
       playerPreviewWeapon: queuedWeapon,
       playerPreviewIgnoresWind: queuedWindIgnoreShots > 0,
       omnRef,
+      cameraSmoothRef,
     }),
     [
       activeEnemyIndex,
@@ -1017,6 +1122,7 @@ export default function App() {
         onJoystickMove={movePlayerCameraRelative}
         onCameraZoomChange={adjustCameraZoom}
         onCameraZoomSet={setCameraZoomValue}
+        onApplySavedView={applySavedView}
         onFire={firePlayer}
         onRewardChoice={chooseReward}
         onReset={resetGame}
