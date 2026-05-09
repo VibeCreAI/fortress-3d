@@ -1,6 +1,6 @@
 import { useTexture } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Suspense, useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { Explosion } from "./Explosion";
 import { Projectile } from "./Projectile";
@@ -10,7 +10,7 @@ import { Terrain } from "./Terrain";
 import { TrajectoryPreview } from "./TrajectoryPreview";
 import { WindFlag } from "./WindFlag";
 import { WindParticles } from "./WindParticles";
-import { SUPPLY_DROP_DELIVERY_MS } from "./constants";
+import { SUPPLY_DROP_DELIVERY_MS, getStagePalette } from "./constants";
 import { terrainHeightAt } from "./gameMath";
 import type {
   ExplosionState,
@@ -307,6 +307,7 @@ function CameraRig({
 }
 
 export function GameScene({
+  stage,
   terrain,
   playerTank,
   computerTanks,
@@ -323,6 +324,7 @@ export function GameScene({
   playerPreviewIgnoresWind,
   onProjectileImpact,
 }: GameSceneProps) {
+  const terrainPalette = useMemo(() => getStagePalette(stage), [stage]);
   const projectileFocusRef = useRef<ProjectileFocus>({
     active: false,
     position: { x: 0, y: 0, z: 0 },
@@ -389,7 +391,7 @@ export function GameScene({
       />
       <ambientLight intensity={0.2} />
 
-      <Terrain terrain={terrain} />
+      <Terrain terrain={terrain} palette={terrainPalette} />
       <WindFlag terrain={terrain} wind={wind} />
       <WindParticles terrain={terrain} wind={wind} />
       {supplyDrops.map((drop) => (

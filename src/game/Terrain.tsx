@@ -1,10 +1,12 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import type { TerrainPalette } from "./constants";
 import { cellCenter, terrainBottom, terrainHeightAt } from "./gameMath";
 import type { TerrainState } from "./gameTypes";
 
 type TerrainProps = {
   terrain: TerrainState;
+  palette: TerrainPalette;
 };
 
 type TerrainCell = {
@@ -29,13 +31,13 @@ const rocks = [
   { x: 18, y: -4, s: 0.5 },
 ];
 
-function heightColor(height: number) {
-  if (height < -2.4) return "#5b6f4b";
-  if (height < -0.8) return "#648356";
-  if (height > 3.3) return "#86d37c";
-  if (height > 2.1) return "#78c86f";
-  if (height > 0.7) return "#69ba64";
-  return "#5aa95b";
+function heightColor(height: number, palette: TerrainPalette) {
+  if (height < -2.4) return palette.topByHeight[0];
+  if (height < -0.8) return palette.topByHeight[1];
+  if (height > 3.3) return palette.topByHeight[5];
+  if (height > 2.1) return palette.topByHeight[4];
+  if (height > 0.7) return palette.topByHeight[3];
+  return palette.topByHeight[2];
 }
 
 function TerrainTopInstances({
@@ -74,7 +76,7 @@ function TerrainTopInstances({
   );
 }
 
-export function Terrain({ terrain }: TerrainProps) {
+export function Terrain({ terrain, palette }: TerrainProps) {
   const bottom = terrainBottom();
   const columnMeshRef = useRef<THREE.InstancedMesh>(null);
   const cells = useMemo(
@@ -86,11 +88,11 @@ export function Terrain({ terrain }: TerrainProps) {
             ...center,
             height,
             columnHeight: Math.max(0.1, height - bottom),
-            color: heightColor(height),
+            color: heightColor(height, palette),
           };
         }),
       ),
-    [bottom, terrain],
+    [bottom, palette, terrain],
   );
   const topCellsByColor = useMemo(() => {
     const buckets = new Map<string, TerrainCell[]>();
@@ -128,7 +130,7 @@ export function Terrain({ terrain }: TerrainProps) {
     <group>
       <instancedMesh ref={columnMeshRef} args={[undefined, undefined, cells.length]} castShadow receiveShadow>
         <boxGeometry args={[terrain.cellSize * 0.94, 1, terrain.cellSize * 0.94]} />
-        <meshStandardMaterial color="#9a673d" roughness={0.94} />
+        <meshStandardMaterial color={palette.column} roughness={0.94} />
       </instancedMesh>
 
       {topCellsByColor.map((bucket) => (
@@ -142,7 +144,7 @@ export function Terrain({ terrain }: TerrainProps) {
 
       <mesh receiveShadow position={[0, bottom - 0.28, 0]}>
         <boxGeometry args={[terrain.width + 1, 0.45, terrain.depth + 1]} />
-        <meshStandardMaterial color="#5f5852" roughness={0.96} />
+        <meshStandardMaterial color={palette.underside} roughness={0.96} />
       </mesh>
 
       {rocks.map((rock) => {
@@ -151,11 +153,11 @@ export function Terrain({ terrain }: TerrainProps) {
           <group key={`${rock.x}-${rock.y}`} position={[rock.x, height + 0.16, rock.y]} scale={rock.s}>
             <mesh castShadow receiveShadow rotation={[0.2, 0.4, 0]}>
               <boxGeometry args={[1.1, 0.65, 0.85]} />
-              <meshStandardMaterial color="#777d7a" roughness={0.93} />
+              <meshStandardMaterial color={palette.rockA} roughness={0.93} />
             </mesh>
             <mesh castShadow receiveShadow position={[0.38, 0.26, -0.2]} rotation={[0.1, -0.2, 0.1]}>
               <boxGeometry args={[0.68, 0.55, 0.58]} />
-              <meshStandardMaterial color="#8c918b" roughness={0.94} />
+              <meshStandardMaterial color={palette.rockB} roughness={0.94} />
             </mesh>
           </group>
         );
@@ -167,11 +169,11 @@ export function Terrain({ terrain }: TerrainProps) {
           <group key={`${shrub.x}-${shrub.y}`} position={[shrub.x, height, shrub.y]}>
             <mesh castShadow position={[0, 0.22, 0]}>
               <boxGeometry args={[0.25, 0.44, 0.25]} />
-              <meshStandardMaterial color="#54704a" roughness={0.78} />
+              <meshStandardMaterial color={palette.shrubStem} roughness={0.78} />
             </mesh>
             <mesh castShadow position={[0, 0.56, 0]}>
               <boxGeometry args={[0.78, 0.52, 0.78]} />
-              <meshStandardMaterial color="#48a94f" roughness={0.72} />
+              <meshStandardMaterial color={palette.shrubLeaf} roughness={0.72} />
             </mesh>
           </group>
         );

@@ -76,6 +76,68 @@ export const OMNISCIENT_DEFAULT_DISTANCE = 38;
 
 export const STAGE_CLEAR_DELAY_MS = 1700;
 
+export type BiomeKey = "grass" | "desert" | "highlands" | "canyon" | "tundra";
+
+export type TerrainPalette = {
+  topByHeight: [string, string, string, string, string, string];
+  column: string;
+  underside: string;
+  rockA: string;
+  rockB: string;
+  shrubStem: string;
+  shrubLeaf: string;
+};
+
+export const BIOME_PALETTES: Record<BiomeKey, TerrainPalette> = {
+  grass: {
+    topByHeight: ["#5b6f4b", "#648356", "#5aa95b", "#69ba64", "#78c86f", "#86d37c"],
+    column: "#9a673d",
+    underside: "#5f5852",
+    rockA: "#777d7a",
+    rockB: "#8c918b",
+    shrubStem: "#54704a",
+    shrubLeaf: "#48a94f",
+  },
+  desert: {
+    topByHeight: ["#a88452", "#bb9961", "#d2b079", "#e0c089", "#ecd29c", "#f6dfaf"],
+    column: "#b58952",
+    underside: "#7a5e3b",
+    rockA: "#a89476",
+    rockB: "#c0a780",
+    shrubStem: "#8a6d3d",
+    shrubLeaf: "#bda86b",
+  },
+  highlands: {
+    topByHeight: ["#3f5440", "#4c6749", "#5a7d52", "#6c925e", "#82a86a", "#a4c178"],
+    column: "#7c6648",
+    underside: "#4e4a3e",
+    rockA: "#6f7367",
+    rockB: "#878a78",
+    shrubStem: "#3e5a3a",
+    shrubLeaf: "#5b8d4a",
+  },
+  canyon: {
+    topByHeight: ["#6c2e21", "#883a25", "#a3492a", "#bd5a30", "#cf6e3a", "#e08947"],
+    column: "#7a3a22",
+    underside: "#4a241a",
+    rockA: "#955040",
+    rockB: "#b06750",
+    shrubStem: "#5a3022",
+    shrubLeaf: "#84573a",
+  },
+  tundra: {
+    topByHeight: ["#9faab2", "#b6c0c6", "#cfd6da", "#dfe5e8", "#ecf0f2", "#f8fafb"],
+    column: "#7e8c93",
+    underside: "#5b666c",
+    rockA: "#7f8a90",
+    rockB: "#9ba5a9",
+    shrubStem: "#6b7a72",
+    shrubLeaf: "#a9bdb3",
+  },
+};
+
+const BIOME_CYCLE: BiomeKey[] = ["grass", "desert", "highlands", "canyon", "tundra"];
+
 export type StageConfig = {
   index: number;
   terrainWidth: number;
@@ -91,6 +153,7 @@ export type StageConfig = {
   enemyCount: number;
   enemyHp: number;
   seedOffset: number;
+  biome: BiomeKey;
 };
 
 export const STAGE_CONFIGS: StageConfig[] = [
@@ -109,6 +172,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     enemyCount: 1,
     enemyHp: 100,
     seedOffset: 11,
+    biome: "grass",
   },
   {
     index: 2,
@@ -116,15 +180,16 @@ export const STAGE_CONFIGS: StageConfig[] = [
     terrainDepth: 29,
     boundsX: 23,
     boundsY: 14,
-    hillCount: 5,
-    hillHeightMin: 1.0,
-    hillHeightMax: 2.1,
-    hillRadiusMin: 5.0,
-    hillRadiusMax: 7.4,
-    noiseAmplitude: 1.15,
+    hillCount: 3,
+    hillHeightMin: 0.4,
+    hillHeightMax: 1.0,
+    hillRadiusMin: 7.5,
+    hillRadiusMax: 10.0,
+    noiseAmplitude: 0.6,
     enemyCount: 1,
     enemyHp: 115,
     seedOffset: 23,
+    biome: "desert",
   },
   {
     index: 3,
@@ -132,15 +197,16 @@ export const STAGE_CONFIGS: StageConfig[] = [
     terrainDepth: 33,
     boundsX: 26,
     boundsY: 16,
-    hillCount: 6,
-    hillHeightMin: 1.0,
-    hillHeightMax: 2.3,
-    hillRadiusMin: 4.8,
-    hillRadiusMax: 7.6,
-    noiseAmplitude: 1.25,
+    hillCount: 8,
+    hillHeightMin: 1.4,
+    hillHeightMax: 3.2,
+    hillRadiusMin: 4.0,
+    hillRadiusMax: 7.0,
+    noiseAmplitude: 1.6,
     enemyCount: 2,
     enemyHp: 100,
     seedOffset: 47,
+    biome: "highlands",
   },
   {
     index: 4,
@@ -157,6 +223,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     enemyCount: 2,
     enemyHp: 120,
     seedOffset: 71,
+    biome: "canyon",
   },
   {
     index: 5,
@@ -173,6 +240,7 @@ export const STAGE_CONFIGS: StageConfig[] = [
     enemyCount: 3,
     enemyHp: 110,
     seedOffset: 95,
+    biome: "tundra",
   },
 ];
 
@@ -197,5 +265,10 @@ export function getStageConfig(stage: number): StageConfig {
     enemyCount: Math.min(5, last.enemyCount + Math.floor(extra / 2) + 1),
     enemyHp: 115 + extra * 6,
     seedOffset: last.seedOffset + 31 * extra,
+    biome: BIOME_CYCLE[(stage - 1) % BIOME_CYCLE.length],
   };
+}
+
+export function getStagePalette(stage: number): TerrainPalette {
+  return BIOME_PALETTES[getStageConfig(stage).biome];
 }
