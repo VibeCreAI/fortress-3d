@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import * as THREE from "three";
 import {
   CANNON_BASE_FORWARD_OFFSET,
@@ -41,39 +41,47 @@ function yawRotation(yaw: number) {
   return -degreesToRadians(yaw);
 }
 
+function shortestAngleDelta(from: number, to: number) {
+  let delta = to - from;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  return delta;
+}
+
 export function Tank({ tank, owner, active, animateMovement = false }: TankProps) {
   const colors = palette[owner];
   const turretYawDelta = signedAngleDelta(tank.bodyYaw, tank.turretYaw);
   const elevation = degreesToRadians(tank.elevation);
   const groupRef = useRef<THREE.Group>(null);
+  const initializedRef = useRef(false);
   const targetPositionRef = useRef(new THREE.Vector3(tank.position.x, tank.height, tank.position.y));
+  const targetBodyYawRef = useRef(yawRotation(tank.bodyYaw));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
     targetPositionRef.current.set(tank.position.x, tank.height, tank.position.y);
-    if (!animateMovement) {
-      groupRef.current?.position.copy(targetPositionRef.current);
+    targetBodyYawRef.current = yawRotation(tank.bodyYaw);
+    if (!initializedRef.current || !animateMovement) {
+      group.position.copy(targetPositionRef.current);
+      group.rotation.y = targetBodyYawRef.current;
+      initializedRef.current = true;
     }
-  }, [animateMovement, tank.height, tank.position.x, tank.position.y]);
+  }, [animateMovement, tank.bodyYaw, tank.height, tank.position.x, tank.position.y]);
 
   useFrame((_, delta) => {
     const group = groupRef.current;
-    if (!group) return;
+    if (!group || !animateMovement) return;
 
-    if (!animateMovement) {
-      group.position.copy(targetPositionRef.current);
-      return;
-    }
-
-    const blend = 1 - Math.exp(-delta * 7.5);
+    const blend = 1 - Math.exp(-delta * 5.5);
     group.position.lerp(targetPositionRef.current, blend);
+
+    const yawDiff = shortestAngleDelta(group.rotation.y, targetBodyYawRef.current);
+    group.rotation.y += yawDiff * blend;
   });
 
   return (
-    <group
-      ref={groupRef}
-      position={[tank.position.x, tank.height, tank.position.y]}
-      rotation={[0, yawRotation(tank.bodyYaw), 0]}
-    >
+    <group ref={groupRef}>
       <group scale={active ? 1.03 : 1}>
         <mesh castShadow receiveShadow position={[0, 0.58, 0]}>
           <boxGeometry args={[2.65, 0.72, 1.35]} />

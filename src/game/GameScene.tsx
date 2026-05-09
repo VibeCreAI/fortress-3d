@@ -96,8 +96,12 @@ function CameraRig({
   explosion,
   supplyDrops,
   projectileFocusRef,
-}: Pick<GameSceneProps, "terrain" | "omnRef" | "projectile" | "explosion" | "supplyDrops"> & {
+  turnOwner,
+  phase,
+  activeEnemy,
+}: Pick<GameSceneProps, "terrain" | "omnRef" | "projectile" | "explosion" | "supplyDrops" | "turnOwner" | "phase"> & {
   projectileFocusRef: MutableRefObject<ProjectileFocus>;
+  activeEnemy: TankState | null;
 }) {
   const { camera, size } = useThree();
   const returningFromCinematicRef = useRef(false);
@@ -232,6 +236,38 @@ function CameraRig({
       return;
     }
 
+    const focusEnemyTurn =
+      turnOwner === "computer" &&
+      (phase === "turnTransition" || phase === "aiming") &&
+      activeEnemy !== null &&
+      activeEnemy.hp > 0;
+
+    if (focusEnemyTurn && activeEnemy) {
+      const { yaw, pitch } = omnRef.current;
+      const pitchRad = pitch * Math.PI / 180;
+      const yawRad = yaw * Math.PI / 180;
+      const focusDistance = 22;
+      const enemyX = activeEnemy.position.x;
+      const enemyZ = activeEnemy.position.y;
+      const enemyH = activeEnemy.height;
+      const targetPosition = targetPositionRef.current.set(
+        enemyX + focusDistance * Math.sin(yawRad) * Math.cos(pitchRad),
+        enemyH + 1.6 + focusDistance * Math.sin(pitchRad),
+        enemyZ + focusDistance * Math.cos(yawRad) * Math.cos(pitchRad),
+      );
+      const lookTarget = targetLookRef.current.set(enemyX, enemyH + 1.4, enemyZ);
+
+      if (!returningFromCinematicRef.current) {
+        lookAtRef.current.copy(lookTarget);
+      }
+      returningFromCinematicRef.current = true;
+      camera.position.lerp(targetPosition, 0.09);
+      lookAtRef.current.lerp(lookTarget, 0.16);
+      camera.lookAt(lookAtRef.current);
+      easeCameraFov(camera, baseFov + 2);
+      return;
+    }
+
     const { yaw, pitch, panX, panZ, distance } = omnRef.current;
     const pitchRad = pitch * Math.PI / 180;
     const yawRad = yaw * Math.PI / 180;
@@ -326,6 +362,9 @@ export function GameScene({
         explosion={explosion}
         supplyDrops={supplyDrops}
         projectileFocusRef={projectileFocusRef}
+        turnOwner={turnOwner}
+        phase={phase}
+        activeEnemy={activeComputerTank ?? null}
       />
       <hemisphereLight args={["#eaf7ff", "#a5734d", 1.12]} />
       <directionalLight
